@@ -1,9 +1,9 @@
 #!/usr/bin/env bash
-# setup-model.sh — Install llama.cpp and download Qwen3-Coder-Next
+# setup-model.sh — Install llama.cpp and download Qwen3-Coder-30B-A3B
 #
 # Usage:
-#   ./scripts/setup-model.sh           # install + download Q3_K_M (recommended for 48GB)
-#   ./scripts/setup-model.sh Q4_K_M    # download a different quantization
+#   ./scripts/setup-model.sh           # install + download Q4_K_M (recommended for 48GB)
+#   ./scripts/setup-model.sh Q3_K_M    # download a different quantization
 #   ./scripts/setup-model.sh --serve   # start the server (after downloading)
 #
 # What this does:
@@ -14,10 +14,10 @@
 set -euo pipefail
 
 # --- Configuration ---
-QUANT="${1:-Q3_K_M}"
-MODEL_REPO="unsloth/Qwen3-Coder-Next-GGUF"
+QUANT="${1:-Q4_K_M}"
+MODEL_REPO="bartowski/Qwen3-Coder-30B-A3B-GGUF"
 MODEL_DIR="$HOME/models"
-CONTEXT_SIZE=8192     # 8K tokens — safe for 48GB Mac with Q3_K_M (36GB model)
+CONTEXT_SIZE=32768    # 32K tokens — recommended for 48GB Mac with Q4_K_M (~24GB total)
 PORT=8080
 GPU_LAYERS=99         # offload everything to GPU (Apple Silicon unified memory)
 
@@ -34,7 +34,7 @@ error() { echo -e "${RED}[x]${NC} $*"; exit 1; }
 
 # --- Serve mode ---
 if [[ "${1:-}" == "--serve" ]]; then
-    QUANT="${2:-Q3_K_M}"
+    QUANT="${2:-Q4_K_M}"
     # Search common cache locations: macOS Library/Caches, Linux ~/.cache, and MODEL_DIR
     # Build list of directories that actually exist (find fails on missing dirs,
     # and set -e + pipefail would silently kill the script)
@@ -43,7 +43,7 @@ if [[ "${1:-}" == "--serve" ]]; then
         [[ -d "$d" ]] && SEARCH_DIRS+=("$d")
     done
     MODEL_FILE=$(find "${SEARCH_DIRS[@]}" \
-        -name "*Qwen3-Coder-Next*${QUANT}*.gguf" ! -name "*.downloadInProgress" -type f 2>/dev/null | head -1 || true)
+        -name "*Qwen3-Coder-30B-A3B*${QUANT}*.gguf" ! -name "*.downloadInProgress" -type f 2>/dev/null | head -1 || true)
     if [[ -z "$MODEL_FILE" ]]; then
         error "No model file found for quant $QUANT. Run setup first."
     fi
@@ -81,7 +81,7 @@ fi
 echo ""
 
 # --- Step 2: Download model ---
-info "Step 2: Downloading Qwen3-Coder-Next (${QUANT})..."
+info "Step 2: Downloading Qwen3-Coder-30B-A3B (${QUANT})..."
 info "  Repository: $MODEL_REPO"
 info "  Destination: $MODEL_DIR"
 
@@ -89,7 +89,7 @@ mkdir -p "$MODEL_DIR"
 
 # Use llama.cpp's built-in HuggingFace download
 # This caches to ~/.cache/llama.cpp/ and is resumable
-info "Downloading... (Q3_K_M is ~35.7GB — this will take a while)"
+info "Downloading... (Q4_K_M is ~18.6GB — this will take a while)"
 echo ""
 
 # Check if we can use llama-cli for downloading, otherwise use huggingface-cli
@@ -103,7 +103,7 @@ if command -v llama-cli &>/dev/null; then
     echo ""
 
     # Monitor download progress in the background
-    EXPECTED_SIZE=38322487328  # bytes, from manifest
+    EXPECTED_SIZE=19948544000  # bytes (~18.6GB Q4_K_M)
     PARTIAL_FILE=$(find "$CACHE_DIR" -name "*${QUANT}*.downloadInProgress" -type f 2>/dev/null | head -1)
 
     # Start llama-cli (it handles the actual download + resume)

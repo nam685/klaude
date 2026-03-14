@@ -8,11 +8,32 @@ This is the core of the tool system. A "tool" is just three things:
 The registry holds all registered tools and can:
 - Return schemas in OpenAI tool format (for sending to the LLM)
 - Execute a tool by name with given arguments
+
+Tools are organized into tiers for dynamic loading:
+- core: always sent (read, write, edit, bash, glob, grep, list_dir, task_list, ask_user, web_search)
+- git: sent when in a git repo (git_status, git_diff, git_log, git_commit)
+- extended: sent on demand or when context allows (sub_agent, web_fetch, lsp, etc.)
+- plugin: custom tools from plugins/MCP (always sent if loaded)
 """
 
 import json
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any, Callable
+
+# Tool tier definitions — which tools belong to which tier
+CORE_TOOLS = frozenset({
+    "read_file", "write_file", "edit_file", "bash", "glob", "grep",
+    "list_directory", "task_list", "ask_user", "web_search",
+})
+
+GIT_TOOLS = frozenset({
+    "git_status", "git_diff", "git_log", "git_commit",
+})
+
+EXTENDED_TOOLS = frozenset({
+    "sub_agent", "web_fetch", "lsp", "notebook_edit",
+    "background_task", "worktree", "team_create", "team_delegate", "team_message",
+})
 
 
 @dataclass
@@ -30,28 +51,38 @@ class ToolRegistry:
 
     def __init__(self) -> None:
         self._tools: dict[str, Tool] = {}
+        self._plugin_tools: set[str] = set()
 
-    def register(self, tool: Tool) -> None:
+    def register(self, tool: Tool, is_plugin: bool = False) -> None:
         """Add a tool to the registry."""
         self._tools[tool.name] = tool
+        if is_plugin:
+            self._plugin_tools.add(tool.name)
 
-    def get_schemas(self) -> list[dict[str, Any]]:
-        """Return all tools in OpenAI function-calling format.
+    def get_schemas(
+        self,
+        tiers: set[str] | None = None,
+    ) -> list[dict[str, Any]]:
+        """Return tool schemas in OpenAI function-calling format.
 
-        This is what we pass to the LLM API in the `tools` parameter.
-        Format:
-        [
-            {
-                "type": "function",
-                "function": {
-                    "name": "read_file",
-                    "description": "...",
-                    "parameters": { ... JSON schema ... }
-                }
-            },
-            ...
-        ]
+        If tiers is None, returns ALL tools (backwards compatible).
+        Otherwise, returns tools in the specified tiers plus any plugin tools.
+        Valid tiers: "core", "git", "extended".
         """
+        if tiers is None:
+            # All tools
+            tools_to_include = set(self._tools.keys())
+        else:
+            tools_to_include: set[str] = set()
+            if "core" in tiers:
+                tools_to_include |= CORE_TOOLS
+            if "git" in tiers:
+                tools_to_include |= GIT_TOOLS
+            if "extended" in tiers:
+                tools_to_include |= EXTENDED_TOOLS
+            # Always include plugin/MCP tools
+            tools_to_include |= self._plugin_tools
+
         return [
             {
                 "type": "function",
@@ -62,6 +93,7 @@ class ToolRegistry:
                 },
             }
             for tool in self._tools.values()
+            if tool.name in tools_to_include
         ]
 
     def execute(self, name: str, arguments: str) -> str:
@@ -69,6 +101,10 @@ class ToolRegistry:
 
         Returns the tool's output as a string (this gets sent back to the LLM
         as a tool result message).
+
+        Note: execution works for ALL registered tools regardless of which
+        schemas were sent to the LLM. If the LLM hallucinates a tool name
+        that exists in the registry, it still runs.
         """
         if name not in self._tools:
             return f"Error: unknown tool '{name}'"

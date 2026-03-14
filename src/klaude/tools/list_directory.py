@@ -51,13 +51,12 @@ def _human_size(size: int) -> str:
 
 tool = Tool(
     name="list_directory",
-    description="List the contents of a directory. Shows files with sizes and directories with trailing /. Directories are listed first.",
+    description="List directory contents with file sizes.",
     parameters={
         "type": "object",
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Path to the directory to list (default: current directory)",
             }
         },
         "required": [],

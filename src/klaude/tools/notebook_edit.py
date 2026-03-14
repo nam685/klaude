@@ -188,23 +188,16 @@ def handle_notebook_edit(
 
 tool = Tool(
     name="notebook_edit",
-    description=(
-        "Read, edit, insert, or execute Jupyter notebook (.ipynb) cells. "
-        "Actions: 'read' (view cells and outputs), 'edit' (modify a cell's content), "
-        "'insert' (add a new cell), 'execute' (run the notebook via jupyter nbconvert). "
-        "Use cell_index (0-based) to target specific cells."
-    ),
+    description="Read, edit, insert, or execute Jupyter notebook cells.",
     parameters={
         "type": "object",
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Path to the .ipynb file.",
             },
             "action": {
                 "type": "string",
                 "enum": ["read", "edit", "insert", "execute"],
-                "description": "Action: 'read', 'edit', 'insert', or 'execute'.",
             },
             "cell_index": {
                 "type": "integer",
@@ -212,7 +205,6 @@ tool = Tool(
             },
             "content": {
                 "type": "string",
-                "description": "New cell content (required for edit and insert).",
             },
             "cell_type": {
                 "type": "string",

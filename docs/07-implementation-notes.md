@@ -1430,9 +1430,9 @@ The config file lives at the project root, found by walking upward from cwd
 
 ```toml
 [default]
-model = "qwen3-coder-next"
+model = "qwen3-coder-30b-a3b"
 base_url = "http://localhost:8080/v1"
-context_window = 65536
+context_window = 32768
 
 [profiles.remote]
 model = "gpt-4o"
@@ -2704,3 +2704,148 @@ In practice, this is acceptable because:
 
 A production system would need a mutex or message queue, but for an
 educational project this trade-off is reasonable.
+
+## Note 44: Context Window Optimization (Phase 11)
+
+### The Problem
+
+With an 8K context window (Qwen3-Coder-Next Q3_K_M), **62.6%** was consumed
+by fixed overhead before any conversation happened:
+
+```
+System prompt:     1,357 tokens  (16.6%)
+Tool schemas (23): 3,771 tokens  (46.0%)
+─────────────────────────────────────────
+Fixed overhead:    5,132 tokens  (62.6%)
+Available:         3,060 tokens  (37.4%)
+```
+
+Compaction at 75% would trigger after only ~1,012 tokens of conversation.
+
+### Solutions Applied
+
+**1. Trimmed tool schema descriptions** (`src/klaude/tools/*.py`)
+
+Cut each tool's `description` to ≤80 characters. Removed parameter
+`description` fields where the name is self-explanatory (e.g., `"path"`,
+`"command"`, `"query"`). The system prompt already explains when to use
+each tool — the schema only needs to say what it does.
+
+**2. Compacted system prompt** (`src/klaude/prompt.py`)
+
+Replaced verbose per-tool explanations (3-4 lines each) with a grouped
+one-liner list. The JSON schemas provide parameter details, so the prompt
+only needs to say *when* to use each tool. Target: ~800 tokens (from ~1,357).
+
+**3. Dynamic tool loading** (`src/klaude/tools/registry.py`, `src/klaude/loop.py`)
+
+Tools are organized into three tiers:
+
+| Tier | Tools | When loaded |
+|------|-------|-------------|
+| core | read_file, write_file, edit_file, bash, glob, grep, list_directory, task_list, ask_user, web_search | Always |
+| git | git_status, git_diff, git_log, git_commit | In git repos |
+| extended | sub_agent, web_fetch, lsp, notebook_edit, background_task, worktree, team_create, team_delegate, team_message | context_window > 16K |
+
+Plugin/MCP tools are always loaded regardless of tier. Extended tools add
+~1,500 tokens of schema overhead — not worth it in a small window.
+
+The key design choice: **execution works for ALL registered tools** regardless
+of which schemas were sent. If the model somehow requests a tool that wasn't
+in the current schema set, it still runs. This is a safety net — better to
+execute a valid request than error on a capability the model knows about from
+the system prompt.
+
+**4. Adaptive compaction** (`src/klaude/compaction.py`)
+
+For context_window ≤ 16K: compact at 60% (vs 75%), keep 4 recent messages
+(vs 6). This gives more breathing room in small windows.
+
+**5. Exact tokenization** (`src/klaude/context.py`, `src/klaude/client.py`)
+
+Uses llama-server's `POST /tokenize` endpoint for exact token counts instead
+of chars/4 heuristic. Cached for repeated strings (system prompt, schemas).
+Falls back to chars/4 if endpoint unavailable.
+
+### Combined Effect
+
+With all optimizations on a 32K window (Qwen3-Coder-30B-A3B):
+
+```
+System prompt:       ~800 tokens  (2.4%)
+Tool schemas (14):  ~1,500 tokens  (4.6%)
+─────────────────────────────────────────
+Fixed overhead:     ~2,300 tokens  (7.0%)
+Available:         ~29,700 tokens  (93.0%)
+```
+
+Files: `src/klaude/tools/*.py`, `src/klaude/prompt.py`, `src/klaude/tools/registry.py`,
+`src/klaude/loop.py`, `src/klaude/compaction.py`, `src/klaude/context.py`,
+`src/klaude/client.py`
+
+## Note 45: Auto-Detect Context Window (Phase 11)
+
+### Problem
+
+The config `context_window` (default 32768) may not match what llama-server
+actually has allocated. If the server runs with `-c 8192`, klaude would
+think it has 32K and overflow.
+
+### Solution
+
+`LLMClient.detect_context_window()` queries llama-server's native `/props`
+endpoint at startup:
+
+```python
+resp = client.get(f"{server_url}/props")
+n_ctx = resp.json()["default_generation_settings"]["n_ctx"]
+```
+
+Resolution priority:
+1. Explicit `context_window` CLI flag
+2. Auto-detected from server (uses smaller of server vs config)
+3. Config file value
+4. Built-in default (32768)
+
+The `/props` endpoint is llama-server-specific (not part of the OpenAI API).
+We strip `/v1` from the base URL to reach it. If detection fails (non-llama
+server, server down), we silently fall back to the config value.
+
+Files: `src/klaude/client.py`, `src/klaude/loop.py`
+
+## Note 46: Model Switch — Qwen3-Coder-30B-A3B (Phase 11)
+
+### Why Switch
+
+| | Qwen3-Coder-Next (old) | Qwen3-Coder-30B-A3B (new) |
+|---|---|---|
+| Size | 80B total, 3B active | 30B total, 3B active |
+| Q4_K_M | ~45GB (won't fit 48GB) | **18.6GB** |
+| Q3_K_M | ~36GB (tight) | ~14GB |
+| Context | 256K native, 8K practical | 128K native, **32K practical** |
+| License | Apache 2.0 | MIT |
+| Speed | ~20 tok/s (Q3_K_M) | **~30-40 tok/s** (Q4_K_M) |
+
+The old model at Q3_K_M (36GB) left only ~12GB for KV cache, limiting us
+to 8K context. The new model at Q4_K_M (18.6GB) leaves ~29GB free,
+comfortably supporting 32K context.
+
+### Practical Impact
+
+- **4x context window**: 32K vs 8K — room for longer conversations
+- **Better quantization**: Q4_K_M vs Q3_K_M — less quality loss
+- **Faster inference**: smaller active parameters at higher quantization
+- **Same active params**: both are 3B active (MoE), so per-token cost is similar
+
+### Server Config
+
+```bash
+llama-server -m Qwen3-Coder-30B-A3B-Q4_K_M.gguf \
+  -c 32768 -ngl 99 --port 8080
+```
+
+Total RAM: ~18.6GB (model) + ~5GB (KV cache at 32K) = ~24GB. Leaves ~24GB
+for macOS and other apps.
+
+Files: `src/klaude/config.py`, `src/klaude/client.py`, `scripts/setup-model.sh`,
+`docs/SETUP-MODEL.md`

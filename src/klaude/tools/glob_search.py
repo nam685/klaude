@@ -36,13 +36,12 @@ def handle_glob(pattern: str, path: str = ".") -> str:
 
 tool = Tool(
     name="glob",
-    description="Find files matching a glob pattern. Use '**/*.py' for recursive search, '*.txt' for current directory only. Returns matching file paths, one per line.",
+    description="Find files matching a glob pattern (e.g. **/*.py).",
     parameters={
         "type": "object",
         "properties": {
             "pattern": {
                 "type": "string",
-                "description": "Glob pattern to match (e.g., '**/*.py', 'src/**/*.ts', '*.md')",
             },
             "path": {
                 "type": "string",

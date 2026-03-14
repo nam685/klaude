@@ -133,18 +133,12 @@ def handle_web_search(query: str, num_results: int = 5) -> str:
 
 tool = Tool(
     name="web_search",
-    description=(
-        "Search the web with a keyword query and return summarized results "
-        "(titles, URLs, snippets). Use for: finding documentation, researching "
-        "APIs, looking up error messages, or any question that needs web results. "
-        "Use web_fetch afterwards to read a specific result page in full."
-    ),
+    description="Search the web by keyword. Returns titles, URLs, snippets.",
     parameters={
         "type": "object",
         "properties": {
             "query": {
                 "type": "string",
-                "description": "The search query (keywords or question).",
             },
             "num_results": {
                 "type": "integer",

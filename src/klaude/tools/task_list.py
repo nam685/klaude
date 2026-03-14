@@ -64,13 +64,7 @@ def handle_task_list(
 
 tool = Tool(
     name="task_list",
-    description=(
-        "Create and manage a task plan for complex multi-step work. "
-        "Use this to break down tasks, track progress, and stay organized. "
-        "Call with action='create' at the start of a complex task to define steps, "
-        "action='update' to mark a step as done/in_progress/skipped, "
-        "and action='list' to review current status."
-    ),
+    description="Create/update a task plan. Actions: create, update, list.",
     parameters={
         "type": "object",
         "properties": {

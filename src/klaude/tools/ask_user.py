@@ -46,18 +46,12 @@ def handle_ask_user(question: str) -> str:
 
 tool = Tool(
     name="ask_user",
-    description=(
-        "Ask the user a question and wait for their response. "
-        "Use when you need clarification, confirmation, or a choice from the user. "
-        "Prefer this over just stating a question in your text output, because "
-        "this tool guarantees you receive the user's answer as a tool result."
-    ),
+    description="Ask the user a question and get their response.",
     parameters={
         "type": "object",
         "properties": {
             "question": {
                 "type": "string",
-                "description": "The question to ask the user.",
             },
         },
         "required": ["question"],

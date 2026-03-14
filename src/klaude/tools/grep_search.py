@@ -77,13 +77,12 @@ def _format_results(matches: list[str], pattern: str) -> str:
 
 tool = Tool(
     name="grep",
-    description="Search for a text pattern (regex) in files. Returns matching lines with file paths and line numbers. Skips binary files, .git, node_modules, __pycache__, and .venv directories.",
+    description="Search file contents with regex. Returns matching lines.",
     parameters={
         "type": "object",
         "properties": {
             "pattern": {
                 "type": "string",
-                "description": "Regex pattern to search for",
             },
             "path": {
                 "type": "string",
