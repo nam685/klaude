@@ -4,10 +4,10 @@
 
 **Q: "Connection refused" when running klaude**
 
-llama-server isn't running. Start it:
+mlx_lm.server isn't running. Start it:
 
 ```
-./scripts/setup-model.sh --serve
+mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8080
 ```
 
 ---
@@ -30,21 +30,21 @@ The model may not support tool calling. Use Qwen3-Coder-Next or another model ex
 
 ## Memory & Performance
 
-**Q: llama-server crashes or gets OOM killed**
+**Q: mlx_lm.server crashes or gets OOM killed**
 
 The model is too large for available RAM. Options:
 
-- Use a smaller quantization: Q3_K_M instead of Q4_K_M
-- Reduce context size: pass `-c 4096` to llama-server
-- Reduce GPU layers: pass `-ngl 50` to llama-server
+- Switch to a smaller mlx model (e.g. a lower-bit quantization on Hugging Face)
+- Reduce context window in `.klaude.toml`: set `context_window = 16384`
+- Close other memory-intensive apps to free unified memory
 
 ---
 
 **Q: Responses are very slow**
 
-This is normal for local LLMs. Q3_K_M on M4 Pro generates roughly 10-20 tok/s. To speed things up:
+This is normal for local LLMs. The 4-bit mlx model on M4 Pro generates roughly 20-40 tok/s. To speed things up:
 
-- Reduce context size (faster generation with smaller KV cache)
+- Reduce context window (faster generation with smaller KV cache)
 - Use a smaller model for rapid iteration
 
 ---
@@ -162,8 +162,9 @@ Ctrl+D
 
 **Q: Where are the model files stored?**
 
-- macOS: `~/Library/Caches/llama.cpp/`
-- Linux: `~/.cache/llama.cpp/` or `~/models/`
+mlx-lm uses the Hugging Face cache:
+
+- macOS/Linux: `~/.cache/huggingface/hub/`
 
 ---
 

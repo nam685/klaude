@@ -464,7 +464,7 @@ context like the current directory, git branch, and recent commits.
 ### The Problem
 
 Every LLM has a context window — a maximum number of tokens it can process
-in one request. For Qwen3-Coder-Next with our llama-server config, that's
+in one request. For Qwen3-Coder-30B-A3B with our mlx-lm server config, that's
 65,536 tokens. The conversation (system prompt + all messages + tool schemas)
 must fit within this limit. If it doesn't, the server will either truncate
 silently or error out.
@@ -2021,7 +2021,7 @@ members build on earlier ones without the lead having to manually relay findings
 
 Three new files, two updated files.
 
-**`src/klaude/team.py`** — core types and execution engine:
+**`src/klaude/extensions/team.py`** — core types and execution engine:
 - `AgentRole` dataclass: name, description, system_prompt, tool_access
 - `TeamMessage` dataclass: sender, content, recipient, timestamp
 - `MessageBoard` class: thread-safe shared context
@@ -2200,7 +2200,7 @@ replaces the old one. There's one active team per session at any time.
 
 - **17 tools total**: 14 existing + 3 team tools (team_create, team_delegate,
   team_message)
-- **2 new files**: `src/klaude/team.py` (~240 lines), `src/klaude/tools/team.py`
+- **2 new files**: `src/klaude/extensions/team.py` (~240 lines), `src/klaude/tools/team.py`
   (~260 lines)
 - **Max iterations per member**: 20 (vs 50 for the main loop, 15 for sub_agent)
 
@@ -2221,7 +2221,7 @@ Seven new files, organized by audience and purpose:
 |------|----------|---------|
 | `README.md` | Everyone | Project overview, quick start, feature summary, links to all docs |
 | `docs/INSTALL.md` | New users | Installation for macOS, Linux, Windows/WSL |
-| `docs/SETUP-MODEL.md` | New users | Qwen3-Coder-Next download, quantization options, llama-server config |
+| `docs/SETUP-MODEL.md` | New users | Model download, mlx-lm server setup |
 | `docs/USAGE.md` | Human operators | REPL, tools, permissions, config, skills, plugins, MCP, teams |
 | `docs/AGENT-GUIDE.md` | Model developers | Tool schemas, agentic loop details, patterns, anti-patterns |
 | `docs/TROUBLESHOOTING.md` | Anyone stuck | Q&A format, common issues and fixes |
@@ -2265,7 +2265,7 @@ the how-to guides to get running fast.
 
 The five example configs under `docs/examples/` cover the most common setups:
 
-- `local.klaude.toml` — minimal config for llama-server on localhost:8080
+- `local.klaude.toml` — minimal config for mlx-lm on localhost:8080
 - `remote-openai.klaude.toml` — remote OpenAI API with API key from env var
 - `multi-profile.klaude.toml` — multiple named profiles switchable via --profile
 - `mcp-servers.klaude.toml` — MCP server integration (GitHub, filesystem, Postgres)
@@ -2731,13 +2731,13 @@ Cut each tool's `description` to ≤80 characters. Removed parameter
 `"command"`, `"query"`). The system prompt already explains when to use
 each tool — the schema only needs to say what it does.
 
-**2. Compacted system prompt** (`src/klaude/prompt.py`)
+**2. Compacted system prompt** (`src/klaude/core/prompt.py`)
 
 Replaced verbose per-tool explanations (3-4 lines each) with a grouped
 one-liner list. The JSON schemas provide parameter details, so the prompt
 only needs to say *when* to use each tool. Target: ~800 tokens (from ~1,357).
 
-**3. Dynamic tool loading** (`src/klaude/tools/registry.py`, `src/klaude/loop.py`)
+**3. Dynamic tool loading** (`src/klaude/tools/registry.py`, `src/klaude/core/loop.py`)
 
 Tools are organized into three tiers:
 
@@ -2756,14 +2756,14 @@ in the current schema set, it still runs. This is a safety net — better to
 execute a valid request than error on a capability the model knows about from
 the system prompt.
 
-**4. Adaptive compaction** (`src/klaude/compaction.py`)
+**4. Adaptive compaction** (`src/klaude/core/compaction.py`)
 
 For context_window ≤ 16K: compact at 60% (vs 75%), keep 4 recent messages
 (vs 6). This gives more breathing room in small windows.
 
-**5. Exact tokenization** (`src/klaude/context.py`, `src/klaude/client.py`)
+**5. Exact tokenization** (`src/klaude/core/context.py`, `src/klaude/core/client.py`)
 
-Uses llama-server's `POST /tokenize` endpoint for exact token counts instead
+Uses the server's `POST /tokenize` endpoint for exact token counts instead
 of chars/4 heuristic. Cached for repeated strings (system prompt, schemas).
 Falls back to chars/4 if endpoint unavailable.
 
@@ -2779,22 +2779,22 @@ Fixed overhead:     ~2,300 tokens  (7.0%)
 Available:         ~29,700 tokens  (93.0%)
 ```
 
-Files: `src/klaude/tools/*.py`, `src/klaude/prompt.py`, `src/klaude/tools/registry.py`,
-`src/klaude/loop.py`, `src/klaude/compaction.py`, `src/klaude/context.py`,
-`src/klaude/client.py`
+Files: `src/klaude/tools/*.py`, `src/klaude/core/prompt.py`, `src/klaude/tools/registry.py`,
+`src/klaude/core/loop.py`, `src/klaude/core/compaction.py`, `src/klaude/core/context.py`,
+`src/klaude/core/client.py`
 
 ## Note 45: Auto-Detect Context Window (Phase 11)
 
 ### Problem
 
-The config `context_window` (default 32768) may not match what llama-server
-actually has allocated. If the server runs with `-c 8192`, klaude would
+The config `context_window` (default 32768) may not match what the server
+actually has allocated. If the server has less capacity, klaude would
 think it has 32K and overflow.
 
 ### Solution
 
-`LLMClient.detect_context_window()` queries llama-server's native `/props`
-endpoint at startup:
+`LLMClient.detect_context_window()` queries the server's `/props`
+endpoint at startup (llama-server native, not available on all backends):
 
 ```python
 resp = client.get(f"{server_url}/props")
@@ -2808,10 +2808,10 @@ Resolution priority:
 4. Built-in default (32768)
 
 The `/props` endpoint is llama-server-specific (not part of the OpenAI API).
-We strip `/v1` from the base URL to reach it. If detection fails (non-llama
-server, server down), we silently fall back to the config value.
+We strip `/v1` from the base URL to reach it. If detection fails (e.g.,
+mlx-lm doesn't expose `/props`), we silently fall back to the config value.
 
-Files: `src/klaude/client.py`, `src/klaude/loop.py`
+Files: `src/klaude/core/client.py`, `src/klaude/core/loop.py`
 
 ## Note 46: Model Switch — Qwen3-Coder-30B-A3B (Phase 11)
 

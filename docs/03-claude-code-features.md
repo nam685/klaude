@@ -7,7 +7,7 @@ priority. Each feature is a learning opportunity.
 
 The minimum to have something useful. Get the loop running end-to-end.
 
-- [ ] **1.1 LLM Client** — OpenAI-compatible client, talks to llama-server
+- [ ] **1.1 LLM Client** — OpenAI-compatible client, talks to mlx_lm.server
 - [ ] **1.2 Basic Tool System** — registry, executor, JSON schema definitions
 - [ ] **1.3 read_file tool** — read file contents, return to LLM
 - [ ] **1.4 write_file tool** — create/overwrite files
@@ -104,4 +104,4 @@ Advanced orchestration.
 | Permission system    | Yes         | Phase 5     | Safety feature                  |
 | MCP support          | Yes         | Phase 7     | Extensibility                   |
 | Agent teams          | Yes         | Phase 8     | Advanced orchestration          |
-| Model                | Claude      | Qwen3-Coder | Open source, local              |
+| Model                | Claude      | Qwen3-Coder-30B-A3B | Open source, local         |

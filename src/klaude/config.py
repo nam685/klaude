@@ -9,7 +9,7 @@ Config resolution order (highest priority wins):
 The config file supports model profiles:
 
     [default]
-    model = "qwen3-coder-30b-a3b"
+    model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
     base_url = "http://localhost:8080/v1"
     context_window = 32768
 

@@ -1,7 +1,7 @@
 # Full configuration — all options demonstrated
 
 [default]
-model = "qwen3-coder-30b-a3b"
+model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
 base_url = "http://localhost:8080/v1"
 api_key = "not-needed"
 context_window = 32768
@@ -9,7 +9,7 @@ max_tokens = 0                      # 0 = unlimited
 auto_approve = false                # true to skip permission prompts
 undo_depth = 10                     # number of undo snapshots to keep
 
-# Model profiles — switch with uv run klaude --profile <name>
+# Model profiles — switch with klaude --profile <name>
 [profiles.remote]
 model = "gpt-4o"
 base_url = "https://api.openai.com/v1"

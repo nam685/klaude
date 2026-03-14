@@ -73,7 +73,7 @@ Error results start with `"Error"`:
 
 ## System prompt
 
-The system prompt (`src/klaude/prompt.py`) tells the model:
+The system prompt (`src/klaude/core/prompt.py`) tells the model:
 
 1. **Who it is**: "You are klaude, an AI coding assistant..."
 2. **What tools exist**: categorized list with usage guidance

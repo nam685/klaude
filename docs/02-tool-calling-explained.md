@@ -23,8 +23,8 @@ LLM uses results to continue reasoning
 
 ## OpenAI-Compatible Tool Format
 
-This is the standard format used by OpenAI, and supported by llama.cpp, vLLM,
-SGLang, and Qwen3-Coder-Next:
+This is the standard format used by OpenAI, and supported by mlx-lm, llama.cpp,
+vLLM, SGLang, and Qwen3-Coder-30B-A3B:
 
 ### Defining a Tool
 
@@ -85,15 +85,15 @@ messages.append({
 ## Why OpenAI-Compatible?
 
 We use the OpenAI SDK format because:
-1. **llama.cpp** serves models with an OpenAI-compatible API (`/v1/chat/completions`)
-2. **vLLM** and **SGLang** do the same
-3. **Qwen3-Coder-Next** was trained on this tool calling format
+1. **mlx-lm** serves models with an OpenAI-compatible API (`/v1/chat/completions`)
+2. **llama.cpp, vLLM, and SGLang** do the same
+3. **Qwen3-Coder-30B-A3B** was trained on this tool calling format
 4. We can swap between local and remote models without code changes
 5. The `openai` Python SDK handles all the HTTP/streaming details
 
-## Qwen3-Coder-Next Tool Calling Notes
+## Qwen3-Coder-30B-A3B Tool Calling Notes
 
-- Uses updated special tokens for tool parsing (make sure llama.cpp is up to date)
+- Uses the standard Qwen3 special tokens for tool parsing
 - Supports parallel tool calls (multiple tools in one response)
 - Trained on agentic coding tools specifically — it knows patterns like
   "read file → edit → run tests"

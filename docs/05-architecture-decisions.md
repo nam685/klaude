@@ -8,8 +8,8 @@ Documenting key design choices and *why* we made them.
 No custom inference code, no direct model loading.
 
 **Why:**
-- llama.cpp, vLLM, and SGLang all expose this API
-- Qwen3-Coder-Next supports it natively
+- mlx-lm (our current backend), llama.cpp, vLLM, and SGLang all expose this API
+- Qwen3-Coder-30B-A3B supports it natively
 - Can swap local/remote models with one config change
 - The `openai` Python SDK handles streaming, retries, etc.
 - Zero coupling to any specific inference framework

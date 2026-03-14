@@ -1,6 +1,6 @@
 # klaude — DIY Claude Code Harness
 
-**Goal:** Build a Claude Code-like agentic coding CLI from scratch, powered by open-source LLMs (starting with Qwen3-Coder-Next). Educational project — learn by building.
+**Goal:** Build a Claude Code-like agentic coding CLI from scratch, powered by open-source LLMs (starting with Qwen3-Coder-30B-A3B). Educational project — learn by building.
 
 ## Why?
 
@@ -11,19 +11,18 @@
 
 ## Target Model
 
-**Qwen3-Coder-Next** (Feb 2026)
-- 80B total params, 3B active (Mixture-of-Experts)
-- 256K context window
-- Apache 2.0 license
+**Qwen3-Coder-30B-A3B** (mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit)
+- 30B total params, 3B active (Mixture-of-Experts)
+- 128K context window
+- MIT license
 - Trained specifically for agentic coding (tool calling, file editing, bash execution)
-- 44.3% on SWE-Bench Pro
-- Runs on consumer hardware via llama.cpp
+- Served via mlx-lm on Apple Silicon
 
 ## Hardware
 
 **Current:** Apple M4 Pro, 48GB unified memory
-- Can run Q4_K_M (4-bit) quantization (~45GB)
-- Context may need limiting to ~64K-100K tokens
+- Runs Qwen3-Coder-30B-A3B 4-bit (~17GB) — fits comfortably
+- Context limited to 32K tokens (default)
 - Perfectly usable for development and testing
 
 **Future:** Dedicated hardware (see docs/06-hardware-guide.md)
@@ -34,7 +33,7 @@
 - `openai` SDK — talks to any OpenAI-compatible server
 - `rich` — terminal formatting and streaming
 - `click` — CLI
-- `llama.cpp` (llama-server) — local model serving
+- `mlx-lm` (mlx_lm.server) — local model serving on Apple Silicon
 
 ## Project Structure
 
@@ -57,7 +56,7 @@ klaude/
 │   ├── context.py           # Context window management
 │   └── prompt.py            # System prompt
 ├── scripts/
-│   └── setup-model.sh       # Download & serve Qwen3-Coder-Next
+│   └── setup-model.sh       # Download & serve Qwen3-Coder-30B-A3B
 ├── pyproject.toml
 └── README.md
 ```
