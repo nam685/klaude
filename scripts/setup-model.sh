@@ -129,10 +129,30 @@ elif command -v llama-cli &>/dev/null; then
     # Unset proxy vars that break llama-cli's HTTP client (see Note 1)
     unset ALL_PROXY all_proxy HTTPS_PROXY https_proxy HTTP_PROXY http_proxy 2>/dev/null || true
 
-    # Run llama-cli — it downloads the model then runs a tiny test
-    if llama-cli -hf "${MODEL_REPO}:${QUANT}" -p "test" -n 1 2>&1 | tail -5; then
+    # Run llama-cli in background so we can show download progress
+    llama-cli -hf "${MODEL_REPO}:${QUANT}" -p "test" -n 1 >/dev/null 2>&1 &
+    LLAMA_PID=$!
+
+    # Poll file size to show progress while downloading
+    EXPECTED_GB="18.6"
+    while kill -0 "$LLAMA_PID" 2>/dev/null; do
+        DL_FILE=$(find "$CACHE_DIR" -name "*${MODEL_NAME}*${QUANT}*" -type f 2>/dev/null | head -1)
+        if [[ -n "$DL_FILE" ]]; then
+            CURRENT_SIZE=$(stat -f%z "$DL_FILE" 2>/dev/null || stat -c%s "$DL_FILE" 2>/dev/null || echo 0)
+            CURRENT_GB=$(echo "scale=1; $CURRENT_SIZE / 1073741824" | bc)
+            printf "\r  Progress: %s GB / %s GB  " "$CURRENT_GB" "$EXPECTED_GB"
+        fi
+        sleep 2
+    done
+    echo ""
+
+    wait "$LLAMA_PID" && LLAMA_OK=true || LLAMA_OK=false
+
+    if $LLAMA_OK; then
         MODEL_FILE=$(find_model "$QUANT")
-    else
+    fi
+
+    if [[ -z "${MODEL_FILE:-}" ]]; then
         warn "llama-cli download failed. Falling back to huggingface-cli..."
     fi
 
