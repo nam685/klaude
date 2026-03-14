@@ -111,3 +111,12 @@
 - [x] Session persistence → `src/klaude/core/session_store.py` — auto-save on exit, keep last 10 sessions
 - [x] Session resume → `src/klaude/ui/cli.py` — `klaude -c` (latest) or `--resume <id>` (specific)
 - [x] /sessions command → `src/klaude/ui/repl.py` — list saved sessions with IDs, turns, summaries
+- [x] Global install → `pyproject.toml` hatch wheel config — `uv tool install` from git
+- [x] Docs update → `docs/INSTALL.md` leads with `uv tool install`, dev install secondary
+
+## Phase 14: Tool Call Robustness + UX
+- [x] Text-based tool call parser → `src/klaude/core/tool_call_parser.py` — fallback when mlx-lm doesn't convert `<function=...>` to API tool_calls (Note 49)
+- [x] Tool call markup suppression → `src/klaude/core/stream.py` — buffer near `<` to detect and hide raw XML during streaming
+- [x] Markdown rendering → `src/klaude/ui/render.py` — bold, italic, inline code, headers, lists, horizontal rules
+- [x] Fix truncated responses → `src/klaude/core/client.py` — send `max_tokens=8192` (mlx-lm defaults to 512)
+- [x] Switch to 8-bit model → `Qwen3-Coder-30B-A3B-Instruct-8bit` (~30GB) for better quality

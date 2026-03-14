@@ -2,10 +2,10 @@
 
 Why estimation, not exact counting?
 
-Local models like Qwen3-Coder-Next use their own tokenizer (not OpenAI's tiktoken).
+Local models like Qwen3-Coder-30B-A3B use their own tokenizer (not OpenAI's tiktoken).
 Exact counting would require either:
   1. Loading the HuggingFace tokenizer (heavy dependency: transformers + torch)
-  2. Hitting llama-server's /tokenize endpoint (non-standard, requires server up)
+  2. Hitting the server's /tokenize endpoint (non-standard, requires server up)
 
 Instead, we use a simple heuristic: ~4 characters per token. This is roughly
 75-80% accurate for English text and code. Good enough for tracking context
@@ -25,7 +25,7 @@ from typing import TYPE_CHECKING, Any
 if TYPE_CHECKING:
     from klaude.core.client import LLMClient
 
-# Qwen3-Coder-30B-A3B context window (matches our llama-server config)
+# Qwen3-Coder-30B-A3B context window (matches our mlx-lm server config)
 # 32K with Q4_K_M + --parallel 1 (17GB model + 3.2GB KV cache ≈ 21GB total, fits 48GB Mac)
 DEFAULT_CONTEXT_WINDOW = 32768
 
@@ -54,7 +54,7 @@ _token_count_cache: dict[str, int] = {}
 
 
 def exact_token_count(text: str, client: LLMClient) -> int:
-    """Get exact token count via llama-server /tokenize endpoint.
+    """Get exact token count via server /tokenize endpoint.
 
     Caches results for repeated strings (system prompt, tool schemas).
     Falls back to chars/4 estimate if endpoint is unavailable.

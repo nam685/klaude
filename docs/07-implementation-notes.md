@@ -464,7 +464,7 @@ context like the current directory, git branch, and recent commits.
 ### The Problem
 
 Every LLM has a context window — a maximum number of tokens it can process
-in one request. For Qwen3-Coder-Next with our llama-server config, that's
+in one request. For Qwen3-Coder-30B-A3B with our mlx-lm server config, that's
 65,536 tokens. The conversation (system prompt + all messages + tool schemas)
 must fit within this limit. If it doesn't, the server will either truncate
 silently or error out.
@@ -2021,7 +2021,7 @@ members build on earlier ones without the lead having to manually relay findings
 
 Three new files, two updated files.
 
-**`src/klaude/team.py`** — core types and execution engine:
+**`src/klaude/extensions/team.py`** — core types and execution engine:
 - `AgentRole` dataclass: name, description, system_prompt, tool_access
 - `TeamMessage` dataclass: sender, content, recipient, timestamp
 - `MessageBoard` class: thread-safe shared context
@@ -2200,7 +2200,7 @@ replaces the old one. There's one active team per session at any time.
 
 - **17 tools total**: 14 existing + 3 team tools (team_create, team_delegate,
   team_message)
-- **2 new files**: `src/klaude/team.py` (~240 lines), `src/klaude/tools/team.py`
+- **2 new files**: `src/klaude/extensions/team.py` (~240 lines), `src/klaude/tools/team.py`
   (~260 lines)
 - **Max iterations per member**: 20 (vs 50 for the main loop, 15 for sub_agent)
 
@@ -2221,7 +2221,7 @@ Seven new files, organized by audience and purpose:
 |------|----------|---------|
 | `README.md` | Everyone | Project overview, quick start, feature summary, links to all docs |
 | `docs/INSTALL.md` | New users | Installation for macOS, Linux, Windows/WSL |
-| `docs/SETUP-MODEL.md` | New users | Qwen3-Coder-Next download, quantization options, llama-server config |
+| `docs/SETUP-MODEL.md` | New users | Model download, mlx-lm server setup |
 | `docs/USAGE.md` | Human operators | REPL, tools, permissions, config, skills, plugins, MCP, teams |
 | `docs/AGENT-GUIDE.md` | Model developers | Tool schemas, agentic loop details, patterns, anti-patterns |
 | `docs/TROUBLESHOOTING.md` | Anyone stuck | Q&A format, common issues and fixes |
@@ -2265,7 +2265,7 @@ the how-to guides to get running fast.
 
 The five example configs under `docs/examples/` cover the most common setups:
 
-- `local.klaude.toml` — minimal config for llama-server on localhost:8080
+- `local.klaude.toml` — minimal config for mlx-lm on localhost:8080
 - `remote-openai.klaude.toml` — remote OpenAI API with API key from env var
 - `multi-profile.klaude.toml` — multiple named profiles switchable via --profile
 - `mcp-servers.klaude.toml` — MCP server integration (GitHub, filesystem, Postgres)
@@ -2731,13 +2731,13 @@ Cut each tool's `description` to ≤80 characters. Removed parameter
 `"command"`, `"query"`). The system prompt already explains when to use
 each tool — the schema only needs to say what it does.
 
-**2. Compacted system prompt** (`src/klaude/prompt.py`)
+**2. Compacted system prompt** (`src/klaude/core/prompt.py`)
 
 Replaced verbose per-tool explanations (3-4 lines each) with a grouped
 one-liner list. The JSON schemas provide parameter details, so the prompt
 only needs to say *when* to use each tool. Target: ~800 tokens (from ~1,357).
 
-**3. Dynamic tool loading** (`src/klaude/tools/registry.py`, `src/klaude/loop.py`)
+**3. Dynamic tool loading** (`src/klaude/tools/registry.py`, `src/klaude/core/loop.py`)
 
 Tools are organized into three tiers:
 
@@ -2756,14 +2756,14 @@ in the current schema set, it still runs. This is a safety net — better to
 execute a valid request than error on a capability the model knows about from
 the system prompt.
 
-**4. Adaptive compaction** (`src/klaude/compaction.py`)
+**4. Adaptive compaction** (`src/klaude/core/compaction.py`)
 
 For context_window ≤ 16K: compact at 60% (vs 75%), keep 4 recent messages
 (vs 6). This gives more breathing room in small windows.
 
-**5. Exact tokenization** (`src/klaude/context.py`, `src/klaude/client.py`)
+**5. Exact tokenization** (`src/klaude/core/context.py`, `src/klaude/core/client.py`)
 
-Uses llama-server's `POST /tokenize` endpoint for exact token counts instead
+Uses the server's `POST /tokenize` endpoint for exact token counts instead
 of chars/4 heuristic. Cached for repeated strings (system prompt, schemas).
 Falls back to chars/4 if endpoint unavailable.
 
@@ -2779,22 +2779,22 @@ Fixed overhead:     ~2,300 tokens  (7.0%)
 Available:         ~29,700 tokens  (93.0%)
 ```
 
-Files: `src/klaude/tools/*.py`, `src/klaude/prompt.py`, `src/klaude/tools/registry.py`,
-`src/klaude/loop.py`, `src/klaude/compaction.py`, `src/klaude/context.py`,
-`src/klaude/client.py`
+Files: `src/klaude/tools/*.py`, `src/klaude/core/prompt.py`, `src/klaude/tools/registry.py`,
+`src/klaude/core/loop.py`, `src/klaude/core/compaction.py`, `src/klaude/core/context.py`,
+`src/klaude/core/client.py`
 
 ## Note 45: Auto-Detect Context Window (Phase 11)
 
 ### Problem
 
-The config `context_window` (default 32768) may not match what llama-server
-actually has allocated. If the server runs with `-c 8192`, klaude would
+The config `context_window` (default 32768) may not match what the server
+actually has allocated. If the server has less capacity, klaude would
 think it has 32K and overflow.
 
 ### Solution
 
-`LLMClient.detect_context_window()` queries llama-server's native `/props`
-endpoint at startup:
+`LLMClient.detect_context_window()` queries the server's `/props`
+endpoint at startup (llama-server native, not available on all backends):
 
 ```python
 resp = client.get(f"{server_url}/props")
@@ -2808,10 +2808,10 @@ Resolution priority:
 4. Built-in default (32768)
 
 The `/props` endpoint is llama-server-specific (not part of the OpenAI API).
-We strip `/v1` from the base URL to reach it. If detection fails (non-llama
-server, server down), we silently fall back to the config value.
+We strip `/v1` from the base URL to reach it. If detection fails (e.g.,
+mlx-lm doesn't expose `/props`), we silently fall back to the config value.
 
-Files: `src/klaude/client.py`, `src/klaude/loop.py`
+Files: `src/klaude/core/client.py`, `src/klaude/core/loop.py`
 
 ## Note 46: Model Switch — Qwen3-Coder-30B-A3B (Phase 11)
 
@@ -2854,14 +2854,14 @@ grammar-based JSON constraining, no crashes.
 uv tool install mlx-lm
 
 # Serve
-mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8080
+mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit --port 8080
 ```
 
 The model name in API requests must be the full HuggingFace repo ID
-(`mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit`), not an arbitrary name.
+(`mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit`), not an arbitrary name.
 MLX server returns 401 otherwise.
 
-Total RAM: ~17GB (model) + ~5GB (KV cache at 32K) = ~22GB. Leaves ~26GB
+Total RAM: ~30GB (model) + ~5GB (KV cache at 32K) = ~35GB. Leaves ~13GB
 for macOS and other apps.
 
 Files: `src/klaude/config.py`, `src/klaude/core/client.py`, `scripts/setup-model.sh`
@@ -2992,3 +2992,80 @@ then the saved messages are appended via `Session.restore()`.
 
 Files: `src/klaude/core/session_store.py`, `src/klaude/core/loop.py` (restore),
 `src/klaude/ui/cli.py` (-c/--resume), `src/klaude/ui/repl.py` (/sessions)
+
+---
+
+## Note 49 — Text-Based Tool Call Parsing (Phase 14)
+
+**Problem:** mlx-lm v0.31.1 has built-in tool call parsing — it detects
+`<tool_call>` tokens in model output and converts them to API-level
+`tool_calls` in the response. But this only works when `<tool_call>` is a
+single token in the vocabulary (checked at `tokenizer_utils.py:307`). In
+quantized models (e.g., `Qwen3-Coder-30B-A3B-Instruct-4bit`), this token
+may not exist as a single vocab entry, so tool calling is **silently
+disabled**. The model still generates tool calls — but as text content:
+
+```
+Let me explore the project.
+
+<function=list_directory>
+<parameter=path>.</parameter>
+</function>
+</tool_call>
+```
+
+Our stream consumer only checks `delta.tool_calls` (the API field), so these
+text-based tool calls were printed as raw XML and never executed.
+
+**Solution — two layers:**
+
+1. **Fallback parser** (`tool_call_parser.py`): after streaming ends, if no
+   API-level tool calls were found, scan `result.content` for tool call
+   patterns. Handles two formats:
+   - Qwen3-Coder XML: `<function=NAME><parameter=KEY>VALUE</parameter></function>`
+   - JSON: `<tool_call>{"name": "...", "arguments": {...}}</tool_call>`
+   Parsed tool calls are added to `result.tool_calls` and stripped from content.
+
+2. **Stream suppression** (`stream.py`): buffer content when `<` is seen.
+   If the buffer grows to match `<function=` or `<tool_call>`, suppress all
+   further output and show a "Calling tools..." spinner instead. If the `<`
+   turns out to be regular text (e.g., `<div>`), flush the buffer to the
+   printer. This prevents the raw XML from flashing on screen.
+
+The prefix-matching logic: for each marker (`<function=`, `<tool_call>`),
+check if the buffer ends with any prefix of that marker. If so, keep
+buffering. If no marker can match, flush immediately.
+
+Files: `src/klaude/core/tool_call_parser.py`, `src/klaude/core/stream.py`
+
+---
+
+## Note 50 — Markdown Rendering + max_tokens Fix (Phase 14)
+
+**Markdown rendering:** The `StreamPrinter` already handled code fences with
+syntax highlighting, but regular markdown (bold, italic, headers, lists) was
+printed as raw text. Added `_md_line()` which converts a complete line:
+
+- Escape Rich markup chars first (`rich.markup.escape`)
+- Headers (`# text`) → `[bold]text[/bold]`
+- Unordered lists (`- item`) → `  • item`
+- Ordered lists (`1. item`) → formatted
+- Horizontal rules (`---`) → dim line
+- Then inline: `` `code` `` → cyan, `**bold**` → bold, `*italic*` → italic
+
+Order matters: escape first, then block-level checks, then inline. Inline
+code is converted before bold/italic to avoid conflicts.
+
+File: `src/klaude/ui/render.py`
+
+**max_tokens fix:** mlx-lm server defaults to `--max-tokens 512` (found in
+server.py argument parser). Without sending `max_tokens` in the API request,
+every response was capped at 512 tokens — causing premature cutoff. Fixed by
+sending `max_tokens=8192` in every chat/chat_stream request.
+
+File: `src/klaude/core/client.py`
+
+**8-bit model switch:** Upgraded default from `Instruct-4bit` (~17GB) to
+`Instruct-8bit` (~30GB). Same architecture and speed (MoE, 3B active), but
+noticeably better output quality. Fits 48GB M4 Pro with 32K context (~35GB
+total). Updated all references across 13 files.

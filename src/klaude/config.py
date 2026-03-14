@@ -9,7 +9,7 @@ Config resolution order (highest priority wins):
 The config file supports model profiles:
 
     [default]
-    model = "qwen3-coder-30b-a3b"
+    model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
     base_url = "http://localhost:8080/v1"
     context_window = 32768
 
@@ -60,7 +60,7 @@ class MCPServerConfig:
 class KlaudeConfig:
     """Resolved configuration for a klaude session."""
     # LLM settings
-    model: str = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
+    model: str = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
     base_url: str = "http://localhost:8080/v1"
     api_key: str = "not-needed"
     context_window: int = 32768

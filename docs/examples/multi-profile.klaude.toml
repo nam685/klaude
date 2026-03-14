@@ -1,11 +1,11 @@
 # Multiple profiles — switch with --profile
 #
-#   uv run klaude "task"                    # uses [default] (local)
-#   uv run klaude --profile openai "task"   # uses [profiles.openai]
-#   uv run klaude --profile ollama "task"   # uses [profiles.ollama]
+#   klaude "task"                    # uses [default] (local)
+#   klaude --profile openai "task"   # uses [profiles.openai]
+#   klaude --profile ollama "task"   # uses [profiles.ollama]
 
 [default]
-model = "qwen3-coder-30b-a3b"
+model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
 base_url = "http://localhost:8080/v1"
 context_window = 32768
 

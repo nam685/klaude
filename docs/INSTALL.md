@@ -1,97 +1,71 @@
 # Installation Guide
 
-## Prerequisites
+## Quick Install (recommended)
 
-- Python 3.12+
-- [uv](https://docs.astral.sh/uv/) — Python package manager
-- llama.cpp — local LLM server
-- Git
-
-## Install uv
-
-```
+```bash
+# Install uv if you don't have it
 curl -LsSf https://astral.sh/uv/install.sh | sh
+
+# Install klaude globally
+uv tool install git+ssh://git@github.com/nam685/klaude.git
 ```
 
-## Clone and Install
+Done. Run `klaude` from any directory.
 
+## Update
+
+```bash
+uv tool install --force git+ssh://git@github.com/nam685/klaude.git
 ```
-git clone https://github.com/nam685/klaude.git
+
+## Development Install (clone)
+
+If you want to hack on klaude itself:
+
+```bash
+git clone git@github.com:nam685/klaude.git
 cd klaude
 uv sync
-```
-
-`uv sync` creates a `.venv` and installs all dependencies automatically.
-
-## Run
-
-```
-uv run klaude                   # interactive REPL
-uv run klaude "fix the bug"    # one-shot mode
+uv run klaude --help
 ```
 
 ## Verify
 
-```
-uv run klaude --help
-```
-
----
-
-## Platform-Specific Setup
-
-### macOS
-
-Install llama.cpp (includes `llama-server`):
-
-```
-brew install llama.cpp
+```bash
+klaude --help
 ```
 
-Apple Silicon: Metal GPU acceleration works out of the box.
+## Model Setup
 
-Install Python 3.12 if needed:
+klaude needs a local LLM server. See [SETUP-MODEL.md](SETUP-MODEL.md) for
+downloading the model and starting the server.
 
-```
-brew install python@3.12
-```
+Quick version (macOS with Apple Silicon):
 
-### Linux (Ubuntu/Debian)
+```bash
+# Install mlx-lm and download the model
+./scripts/setup-model.sh
 
-Install Python:
+# Start the server
+./scripts/setup-model.sh --serve
 
-```
-sudo apt install python3.12 python3.12-venv
-```
-
-Build llama.cpp from source:
-
-```
-git clone https://github.com/ggerganov/llama.cpp
-cd llama.cpp && cmake -B build && cmake --build build --config Release
+# In another terminal
+klaude "hello, list the files here"
 ```
 
-For CUDA support, add `-DGGML_CUDA=ON` to the first cmake command:
+## Prerequisites
 
-```
-cmake -B build -DGGML_CUDA=ON
-```
-
-Requires: `cmake`, `g++`, and (for CUDA) NVIDIA CUDA toolkit.
-
-### Windows
-
-Use WSL2 with Ubuntu, then follow the Linux instructions above. Native Windows is not tested.
-
----
+- macOS (Apple Silicon) or Linux
+- Python 3.12+
+- [uv](https://docs.astral.sh/uv/)
 
 ## Dependencies
 
-Installed automatically by `uv sync` (from `pyproject.toml`):
+Installed automatically:
 
-| Package | Version |
+| Package | Purpose |
 |---------|---------|
-| openai  | >=1.60.0 |
-| rich    | >=13.0.0 |
-| click   | >=8.1.0  |
-| mcp     | >=1.0.0  |
+| openai  | LLM API client (OpenAI-compatible) |
+| rich    | Terminal formatting, syntax highlighting |
+| click   | CLI argument parsing |
+| mcp     | Model Context Protocol support |

@@ -19,4 +19,4 @@
 ## Running
 - `uv sync` to install deps
 - `uv run klaude "task"` to run the CLI
-- LLM backend: llama-server on localhost:8080
+- LLM backend: mlx-lm (mlx_lm.server) on localhost:8080

@@ -4,19 +4,18 @@
 
 **Apple M4 Pro, 48GB unified memory**
 
-| What works                          | What doesn't fit              |
-|-------------------------------------|-------------------------------|
-| Qwen3-Coder-Next Q2_K (~25GB)      | Q8_0 quantization (~85GB)     |
-| Qwen3-Coder-Next Q3_K_M (~33GB)    | Full FP16 model               |
-| Qwen3-Coder-Next Q4_K_M (~45GB)*   | Multiple models simultaneously |
-
-*Tight — leaves ~3GB for context KV cache. Limit context to 64K tokens.
+| What works                                           | What doesn't fit              |
+|------------------------------------------------------|-------------------------------|
+| Qwen3-Coder-30B-A3B 8-bit via mlx-lm (~30GB)       | Full FP16/BF16 model (~60GB)  |
+| Qwen3-Coder-30B-A3B 8-bit via mlx-lm (~30GB)       | Multiple large models at once |
+| Plenty of headroom for KV cache at 32K context      |                               |
 
 ### Apple Silicon Advantage
 
 Apple Silicon uses **unified memory** — CPU and GPU share the same RAM pool.
 This means all 48GB is available for model inference. No separate "VRAM" like
-NVIDIA GPUs. llama.cpp supports this natively via Metal.
+NVIDIA GPUs. mlx-lm is built specifically for Apple Silicon and uses Metal
+natively via the MLX framework.
 
 ### Practical Tips for Your Mac
 
@@ -27,8 +26,8 @@ memory_pressure
 # Monitor during inference
 # Activity Monitor → Memory tab → watch "Memory Used"
 
-# If tight, reduce context
-llama-server -c 32768   # 32K context instead of 64K
+# If tight, reduce context (mlx_lm.server flag)
+mlx_lm.server --max-tokens 32768   # adjust as needed
 ```
 
 ## Future Hardware Options
@@ -69,17 +68,17 @@ llama-server -c 32768   # 32K context instead of 64K
 
 ## Recommendation Path
 
-1. **Now:** Use your M4 Pro 48GB with Q3_K_M. Perfectly good for development.
-2. **When you want more:** Try a cloud GPU for a few hours to test Q8_0 quality.
-3. **If you're serious:** A used dual-3090 system or Mac Studio M4 Max 128GB
-   gives the best balance of cost, performance, and usability.
+1. **Now:** Use your M4 Pro 48GB with Qwen3-Coder-30B-A3B 8-bit (~30GB). Better quality, fits with 32K context.
+2. **When you want more:** Try the 8-bit version (~30GB) for better quality — still fits easily.
+3. **If you're serious:** A Mac Studio M4 Max 128GB or Mac Studio M4 Ultra 192GB
+   gives full context at maximum quality with multiple models simultaneously.
 
-## Performance Expectations (M4 Pro 48GB, Q3_K_M)
+## Performance Expectations (M4 Pro 48GB, Qwen3-Coder-30B-A3B 4-bit via mlx-lm)
 
-- **Prompt processing:** ~50-100 tok/s (reading your codebase)
-- **Token generation:** ~15-25 tok/s (model's response)
-- **First token latency:** 1-3 seconds (depending on prompt length)
-- **Practical feel:** Usable but noticeably slower than cloud APIs
+- **Prompt processing:** ~100-200 tok/s (reading your codebase)
+- **Token generation:** ~30-50 tok/s (model's response)
+- **First token latency:** <1 second (mlx-lm is well-optimized for Apple Silicon)
+- **Practical feel:** Fast and responsive — noticeably better than llama.cpp for this model
 
 These numbers are approximate — actual performance varies with context length
 and system load.

@@ -1,4 +1,4 @@
-"""LLM client — talks to any OpenAI-compatible API (llama-server, vLLM, etc.).
+"""LLM client — talks to any OpenAI-compatible API (mlx-lm, vLLM, etc.).
 
 Includes retry logic with exponential backoff for transient failures
 (connection errors, HTTP 5xx, timeouts). See Note 22 in docs.
@@ -17,9 +17,13 @@ from openai.types.chat import (
 )
 
 
-# Default to local llama-server
+# Default to local mlx-lm server
 DEFAULT_BASE_URL = "http://localhost:8080/v1"
-DEFAULT_MODEL = "qwen3-coder-30b-a3b"
+DEFAULT_MODEL = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
+
+# mlx-lm server defaults to --max-tokens 512 which truncates responses.
+# Override per-request so the model can generate full responses.
+DEFAULT_MAX_COMPLETION_TOKENS = 8192
 
 # Retry config
 MAX_RETRIES = 3
@@ -56,6 +60,7 @@ class LLMClient:
         kwargs: dict = {
             "model": self.model,
             "messages": messages,
+            "max_tokens": DEFAULT_MAX_COMPLETION_TOKENS,
         }
         if tools:
             kwargs["tools"] = tools
@@ -75,6 +80,7 @@ class LLMClient:
         kwargs: dict = {
             "model": self.model,
             "messages": messages,
+            "max_tokens": DEFAULT_MAX_COMPLETION_TOKENS,
             "stream": True,
         }
         if tools:
@@ -83,9 +89,9 @@ class LLMClient:
         return self._retry(lambda: self.client.chat.completions.create(**kwargs))
 
     def detect_context_window(self) -> int | None:
-        """Query llama-server for the actual context window size.
+        """Query the server for the actual context window size.
 
-        Tries /props first (llama-server native), falls back to None.
+        Tries /props first (llama-server/llama.cpp native), falls back to None.
         Returns the context size in tokens, or None if detection fails.
         """
         # Strip /v1 suffix to get the base server URL
@@ -107,7 +113,7 @@ class LLMClient:
         return None
 
     def tokenize(self, text: str) -> list[int] | None:
-        """Get exact token IDs using llama-server's /tokenize endpoint.
+        """Get exact token IDs using the server's /tokenize endpoint.
 
         Returns list of token IDs, or None if endpoint unavailable.
         """

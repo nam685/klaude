@@ -13,7 +13,7 @@
 set -euo pipefail
 
 # --- Configuration ---
-MLX_MODEL="mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
+MLX_MODEL="mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
 PORT=8080
 
 # Colors for output

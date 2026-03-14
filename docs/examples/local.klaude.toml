@@ -1,7 +1,7 @@
-# Local llama-server — the default setup
+# Local mlx-lm server — the default setup
 # Copy this to your project root as .klaude.toml
 
 [default]
-model = "qwen3-coder-30b-a3b"
+model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
 base_url = "http://localhost:8080/v1"
 context_window = 32768

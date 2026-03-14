@@ -1,5 +1,7 @@
 # Qwen3-Coder-Next — Model Guide
 
+> **Note:** This doc covers the original model choice. klaude now uses Qwen3-Coder-30B-A3B via mlx-lm — see SETUP-MODEL.md. The content below is kept as historical reference.
+
 ## Overview
 
 | Property          | Value                                    |

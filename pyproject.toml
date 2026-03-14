@@ -13,6 +13,12 @@ dependencies = [
 [project.scripts]
 klaude = "klaude.ui.cli:main"
 
+[project.urls]
+Repository = "https://github.com/nam685/klaude"
+
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/klaude"]
