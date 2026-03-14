@@ -11,7 +11,7 @@
 
 ## Target Model
 
-**Qwen3-Coder-30B-A3B** (mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit)
+**Qwen3-Coder-30B-A3B** (mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit)
 - 30B total params, 3B active (Mixture-of-Experts)
 - 128K context window
 - MIT license
@@ -21,7 +21,7 @@
 ## Hardware
 
 **Current:** Apple M4 Pro, 48GB unified memory
-- Runs Qwen3-Coder-30B-A3B 4-bit (~17GB) — fits comfortably
+- Runs Qwen3-Coder-30B-A3B 8-bit (~30GB) — fits comfortably
 - Context limited to 32K tokens (default)
 - Perfectly usable for development and testing
 

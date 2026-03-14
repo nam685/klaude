@@ -19,7 +19,7 @@ from openai.types.chat import (
 
 # Default to local mlx-lm server
 DEFAULT_BASE_URL = "http://localhost:8080/v1"
-DEFAULT_MODEL = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
+DEFAULT_MODEL = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
 
 # mlx-lm server defaults to --max-tokens 512 which truncates responses.
 # Override per-request so the model can generate full responses.

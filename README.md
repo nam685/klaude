@@ -31,7 +31,7 @@ klaude> /commit
 uv tool install git+https://github.com/nam685/klaude.git
 
 # 2. Download model and start server
-./scripts/setup-model.sh            # downloads Qwen3-Coder-30B-A3B-Instruct-4bit
+./scripts/setup-model.sh            # downloads Qwen3-Coder-30B-A3B-Instruct-8bit
 ./scripts/setup-model.sh --serve    # starts mlx_lm.server on :8080
 
 # 3. Run klaude (in another terminal)
@@ -58,9 +58,9 @@ Prerequisites: Python 3.12+, [uv](https://docs.astral.sh/uv/), [mlx-lm](https://
 
 ## Target model
 
-**Qwen3-Coder-30B-A3B** — 30B MoE (3B active), 128K context, MIT. Purpose-built for agentic coding with tool calling. Runs on a Mac with 48GB RAM via mlx-lm (Q4_K_M, ~17GB).
+**Qwen3-Coder-30B-A3B** — 30B MoE (3B active), 128K context, MIT. Purpose-built for agentic coding with tool calling. Runs on a Mac with 48GB RAM via mlx-lm (8-bit, ~30GB).
 
-Model: `mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit`
+Model: `mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit`
 
 See [docs/SETUP-MODEL.md](docs/SETUP-MODEL.md) for model download and server configuration.
 
@@ -70,7 +70,7 @@ Create `.klaude.toml` in your project root:
 
 ```toml
 [default]
-model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
+model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
 base_url = "http://localhost:8080/v1"
 context_window = 32768
 
@@ -148,3 +148,5 @@ src/klaude/
 ## License
 
 Educational project. Not yet licensed — license TBD.
+
+klaude was here!

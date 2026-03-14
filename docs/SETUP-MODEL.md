@@ -4,7 +4,7 @@ klaude uses a local LLM served via an OpenAI-compatible API.
 
 ## Recommended: Qwen3-Coder-30B-A3B on mlx-lm
 
-**Model:** `mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit` (~17GB)
+**Model:** `mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit` (~30GB)
 
 - 30B total parameters, 3B active (MoE) — fast inference
 - 128K native context, 32K practical with 48GB RAM
@@ -14,7 +14,7 @@ klaude uses a local LLM served via an OpenAI-compatible API.
 ### Quick Setup
 
 ```bash
-# Install mlx-lm + download model (~17GB)
+# Install mlx-lm + download model (~30GB)
 ./scripts/setup-model.sh
 
 # Start the server
@@ -28,11 +28,11 @@ klaude uses a local LLM served via an OpenAI-compatible API.
 uv tool install mlx-lm
 
 # Download model
-hf download mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit
+hf download mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit
 
 # Start server
 mlx_lm.server \
-  --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit \
+  --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit \
   --port 8080
 ```
 
@@ -46,7 +46,7 @@ curl http://localhost:8080/v1/models
 curl http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit",
+    "model": "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit",
     "messages": [{"role": "user", "content": "Hello"}]
   }'
 ```
@@ -55,11 +55,11 @@ curl http://localhost:8080/v1/chat/completions \
 
 | Component | RAM |
 |-----------|-----|
-| Model (4-bit) | ~17GB |
+| Model (8-bit) | ~30GB |
 | KV cache (32K context) | ~5GB |
-| **Total** | **~22GB** |
+| **Total** | **~35GB** |
 
-Fits comfortably on a 48GB Mac with ~26GB left for macOS and apps.
+Fits on a 48GB Mac with ~13GB left for macOS and apps.
 
 ## Alternative Models
 
@@ -90,7 +90,7 @@ Instead of CLI flags, put your model settings in `.klaude.toml`:
 
 ```toml
 [default]
-model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
+model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
 base_url = "http://localhost:8080/v1"
 context_window = 32768
 ```

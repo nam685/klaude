@@ -7,7 +7,7 @@
 mlx_lm.server isn't running. Start it:
 
 ```
-mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8080
+mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit --port 8080
 ```
 
 ---

@@ -2,6 +2,6 @@
 # Copy this to your project root as .klaude.toml
 
 [default]
-model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
+model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
 base_url = "http://localhost:8080/v1"
 context_window = 32768

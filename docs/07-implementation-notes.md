@@ -2854,14 +2854,14 @@ grammar-based JSON constraining, no crashes.
 uv tool install mlx-lm
 
 # Serve
-mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8080
+mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit --port 8080
 ```
 
 The model name in API requests must be the full HuggingFace repo ID
-(`mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit`), not an arbitrary name.
+(`mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit`), not an arbitrary name.
 MLX server returns 401 otherwise.
 
-Total RAM: ~17GB (model) + ~5GB (KV cache at 32K) = ~22GB. Leaves ~26GB
+Total RAM: ~30GB (model) + ~5GB (KV cache at 32K) = ~35GB. Leaves ~13GB
 for macOS and other apps.
 
 Files: `src/klaude/config.py`, `src/klaude/core/client.py`, `scripts/setup-model.sh`

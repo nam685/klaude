@@ -6,7 +6,7 @@
 
 | What works                                           | What doesn't fit              |
 |------------------------------------------------------|-------------------------------|
-| Qwen3-Coder-30B-A3B 4-bit via mlx-lm (~17GB)       | Full FP16/BF16 model (~60GB)  |
+| Qwen3-Coder-30B-A3B 8-bit via mlx-lm (~30GB)       | Full FP16/BF16 model (~60GB)  |
 | Qwen3-Coder-30B-A3B 8-bit via mlx-lm (~30GB)       | Multiple large models at once |
 | Plenty of headroom for KV cache at 32K context      |                               |
 
@@ -68,7 +68,7 @@ mlx_lm.server --max-tokens 32768   # adjust as needed
 
 ## Recommendation Path
 
-1. **Now:** Use your M4 Pro 48GB with Qwen3-Coder-30B-A3B 4-bit (~17GB). Comfortable headroom, fast inference.
+1. **Now:** Use your M4 Pro 48GB with Qwen3-Coder-30B-A3B 8-bit (~30GB). Better quality, fits with 32K context.
 2. **When you want more:** Try the 8-bit version (~30GB) for better quality — still fits easily.
 3. **If you're serious:** A Mac Studio M4 Max 128GB or Mac Studio M4 Ultra 192GB
    gives full context at maximum quality with multiple models simultaneously.
