@@ -112,6 +112,12 @@ def consume_stream(
     # Rich rendering for code blocks in streaming output
     printer = StreamPrinter(console) if print_text else None
 
+    # Text-based tool call suppression: buffer content near '<' to detect
+    # model-native tool call markup before printing it.
+    _TOOL_MARKERS = ("<function=", "<tool_call>")
+    _print_pending = ""
+    _suppressing_tool_text = False
+
     interrupted = False
     disconnected = False
     try:
@@ -124,15 +130,56 @@ def consume_stream(
             # Stop spinner only for text content.  For tool-call-only
             # responses the spinner stays alive with a progress label,
             # eliminating the visual gap + blank lines before execution.
-            if delta.content and spinner:
+            if delta.content and spinner and not _suppressing_tool_text:
                 spinner.stop()
                 spinner = None
 
             # --- Text content delta ---
             if delta.content:
                 result.content += delta.content
-                if printer:
-                    printer.feed(delta.content)
+
+                if _suppressing_tool_text:
+                    pass  # Already detected tool call markup, skip printing
+                elif printer:
+                    _print_pending += delta.content
+
+                    # Check for complete tool call marker
+                    _marker_found = False
+                    for _marker in _TOOL_MARKERS:
+                        _idx = _print_pending.find(_marker)
+                        if _idx != -1:
+                            # Print text before the marker, suppress the rest
+                            if _idx > 0:
+                                printer.feed(_print_pending[:_idx])
+                            _suppressing_tool_text = True
+                            _print_pending = ""
+                            _marker_found = True
+                            # Show spinner for tool call progress
+                            if not spinner:
+                                spinner = Status(
+                                    "Calling tools...",
+                                    console=console,
+                                    spinner="dots",
+                                )
+                                spinner.start()
+                            break
+
+                    if not _marker_found:
+                        # Check if buffer might still form a marker
+                        # (ends with a prefix of "<function=" or "<tool_call>")
+                        _lt = _print_pending.rfind("<")
+                        if _lt >= 0 and any(
+                            m.startswith(_print_pending[_lt:])
+                            for m in _TOOL_MARKERS
+                        ):
+                            # Hold text from '<' onward, print everything before
+                            if _lt > 0:
+                                printer.feed(_print_pending[:_lt])
+                            _print_pending = _print_pending[_lt:]
+                        else:
+                            # No match possible, flush to printer
+                            printer.feed(_print_pending)
+                            _print_pending = ""
 
             # --- Tool call deltas ---
             if delta.tool_calls:
@@ -175,6 +222,10 @@ def consume_stream(
     finally:
         if spinner is not None:
             spinner.stop()
+
+    # Flush pending print buffer (only if we didn't detect tool call markup)
+    if printer and _print_pending and not _suppressing_tool_text:
+        printer.feed(_print_pending)
 
     # Flush any remaining buffered text (e.g., partial lines, unclosed code blocks)
     if printer:
