@@ -10,7 +10,7 @@ klaude uses a local LLM served via an OpenAI-compatible API. The recommended mod
 - 128K context window (native)
 - MIT license
 - Built for agentic coding: tool calling, file editing, bash execution
-- HuggingFace: `bartowski/Qwen3-Coder-30B-A3B-GGUF`
+- HuggingFace: `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`
 
 ## Quantization Options
 
@@ -39,7 +39,7 @@ brew install llama.cpp
 
 ```bash
 llama-server \
-  -hf bartowski/Qwen3-Coder-30B-A3B-GGUF:Q4_K_M \
+  -m ~/models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf \
   --port 8080 \
   -c 32768 \
   -ngl 99
