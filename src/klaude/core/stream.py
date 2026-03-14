@@ -22,12 +22,13 @@ This module handles that reassembly.
 
 from dataclasses import dataclass, field
 
-from openai import Stream
+import httpx
+from openai import APIConnectionError, Stream
 from openai.types.chat import ChatCompletionChunk
 from rich.console import Console
 from rich.status import Status
 
-from klaude.render import StreamPrinter
+from klaude.ui.render import StreamPrinter
 
 console = Console()
 
@@ -107,12 +108,12 @@ def consume_stream(
     # Show a spinner until the first token arrives
     spinner: Status | None = Status("Thinking...", console=console, spinner="dots")
     spinner.start()
-    first_token = True
 
     # Rich rendering for code blocks in streaming output
     printer = StreamPrinter(console) if print_text else None
 
     interrupted = False
+    disconnected = False
     try:
         for chunk in stream:
             if not chunk.choices:
@@ -120,9 +121,10 @@ def consume_stream(
 
             delta = chunk.choices[0].delta
 
-            # Stop the spinner on first real content
-            if first_token and (delta.content or delta.tool_calls):
-                first_token = False
+            # Stop spinner only for text content.  For tool-call-only
+            # responses the spinner stays alive with a progress label,
+            # eliminating the visual gap + blank lines before execution.
+            if delta.content and spinner:
                 spinner.stop()
                 spinner = None
 
@@ -151,12 +153,25 @@ def consume_stream(
                             acc.name += tc_delta.function.name
                         if tc_delta.function.arguments:
                             acc.arguments += tc_delta.function.arguments
+
+                # Update spinner to show tool call progress
+                if spinner:
+                    n = len(tool_calls_by_index)
+                    spinner.update(
+                        f"Calling {n} tool{'s' if n != 1 else ''}..."
+                    )
     except KeyboardInterrupt:
         # Ctrl+C during streaming — stop gracefully, return what we have so far.
         # We discard incomplete tool calls (they'd fail to execute anyway)
         # and keep any text content that was already streamed.
         interrupted = True
         tool_calls_by_index.clear()
+    except (APIConnectionError, httpx.RemoteProtocolError, httpx.ReadError) as e:
+        # Server dropped connection mid-stream (OOM crash, timeout, etc.)
+        # Keep whatever content was already received and report the disconnect.
+        disconnected = True
+        tool_calls_by_index.clear()
+        console.print(f"\n[red]Server disconnected: {e}[/red]")
     finally:
         if spinner is not None:
             spinner.stop()
@@ -170,6 +185,12 @@ def consume_stream(
             result.content += "\n\n[interrupted]"
         else:
             result.content = "[interrupted]"
+
+    if disconnected:
+        if result.content:
+            result.content += "\n\n[server disconnected]"
+        else:
+            result.content = "[server disconnected]"
 
     # Collect accumulated tool calls in order
     for idx in sorted(tool_calls_by_index):

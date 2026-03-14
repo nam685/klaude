@@ -18,19 +18,20 @@ import os
 from openai import APIConnectionError, APITimeoutError, InternalServerError
 from rich.console import Console
 
-from klaude.client import LLMClient
-from klaude.compaction import compact
 from klaude.config import KlaudeConfig
-from klaude.context import ContextTracker
-from klaude.history import MessageHistory
-from klaude.hooks import run_hook
-from klaude.mcp import MCPBridge
+from klaude.core.client import LLMClient
+from klaude.core.compaction import compact
+from klaude.core.context import ContextTracker
+from klaude.core.history import MessageHistory
+from klaude.core.prompt import SYSTEM_PROMPT
+from klaude.core.stream import consume_stream
+from klaude.extensions.hooks import run_hook
+from klaude.extensions.mcp import MCPBridge
+from klaude.extensions.plugins import load_plugin_tools
+from klaude.extensions.skills import Skill, load_all_skills
 from klaude.permissions import PermissionManager
-from klaude.plugins import load_plugin_tools
-from klaude.prompt import SYSTEM_PROMPT
-from klaude.skills import Skill, load_all_skills
-from klaude.stream import consume_stream
 from klaude.tools.registry import ToolRegistry
+from klaude.ui.status_bar import StatusBar
 from klaude.tools.bash import tool as bash_tool
 from klaude.tools.edit_file import tool as edit_file_tool
 from klaude.tools.glob_search import tool as glob_tool
@@ -210,6 +211,9 @@ class Session:
         # Skills (reusable prompt templates)
         self.skills: dict[str, Skill] = load_all_skills(self.config.skills_dir)
 
+        # Persistent status bar (caller must .start()/.stop())
+        self.status_bar = StatusBar()
+
         # Undo snapshots: list of (turn_count, history_messages_copy)
         self._snapshots: list[tuple[int, list[dict]]] = []
         self._undo_depth = self.config.undo_depth
@@ -235,6 +239,18 @@ class Session:
     def can_undo(self) -> bool:
         """Whether there's a snapshot to undo to."""
         return len(self._snapshots) > 0
+
+    def restore(self, saved_messages: list[dict], turn_count: int) -> None:
+        """Restore a previous session's conversation history.
+
+        The saved_messages should NOT include the system prompt (index 0) —
+        that's already set up by __init__.  This just appends the old
+        user/assistant/tool exchanges and resets the turn counter.
+        """
+        for msg in saved_messages:
+            self.history._messages.append(msg)
+        self.turn_count = turn_count
+        self.tracker.update(self.history.messages)
 
     def turn(self, user_message: str) -> str:
         """Process one user message through the agentic loop.
@@ -265,9 +281,8 @@ class Session:
                 )
                 return "Stopped: token budget exceeded."
 
-            status_style = "red" if self.tracker.is_warning else "dim"
-            self.console.print(
-                f"\n[{status_style}]{self.tracker.format_turn_summary(self.turn_count)}[/{status_style}]"
+            self.status_bar.update(
+                self.tracker.format_compact(self.turn_count)
             )
 
             # --- LLM call with error recovery ---
@@ -289,9 +304,10 @@ class Session:
             if not result.has_tool_calls:
                 self.history.add_assistant(result.to_message_dict())
                 self.tracker.update(self.history.messages)
-                self.console.print(
-                    f"\n[dim]{self.tracker.format_status()}[/dim]"
+                self.status_bar.update(
+                    self.tracker.format_compact(self.turn_count)
                 )
+                self.console.print()  # blank line after response
                 return result.content
 
             # --- Case 2: Tool calls → execute and continue ---
@@ -341,7 +357,9 @@ class Session:
 
         # Hit MAX_ITERATIONS
         self.tracker.update(self.history.messages)
-        self.console.print(f"\n[red]{self.tracker.format_status()}[/red]")
+        self.status_bar.update(
+            self.tracker.format_compact(self.turn_count)
+        )
         self.console.print("[red]Warning: hit maximum iterations, stopping.[/red]")
         return "Stopped: exceeded maximum iterations."
 

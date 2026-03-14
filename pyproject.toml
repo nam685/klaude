@@ -11,7 +11,7 @@ dependencies = [
 ]
 
 [project.scripts]
-klaude = "klaude.cli:main"
+klaude = "klaude.ui.cli:main"
 
 [build-system]
 requires = ["hatchling"]

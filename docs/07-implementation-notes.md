@@ -2837,15 +2837,158 @@ comfortably supporting 32K context.
 - **Faster inference**: smaller active parameters at higher quantization
 - **Same active params**: both are 3B active (MoE), so per-token cost is similar
 
-### Server Config
+### Server: llama.cpp → mlx-lm
+
+Originally served via llama.cpp (`llama-server`), but hit a blocking grammar
+crash (`Unexpected empty grammar stack after accepting piece: @ (31)`,
+Issue #19304). Tool-call JSON constraining would crash the server mid-response.
+Attempted a fix from PR #19503 but it was incomplete — the model still produced
+malformed tool arguments with mangled paths (`/Users@nam/` instead of `/Users/nam/`).
+
+Switched to **mlx-lm** (`mlx_lm.server`) — Apple's native ML framework for
+Apple Silicon. OpenAI-compatible API, proper streaming tool call support, no
+grammar-based JSON constraining, no crashes.
 
 ```bash
-llama-server -m Qwen3-Coder-30B-A3B-Q4_K_M.gguf \
-  -c 32768 -ngl 99 --port 8080
+# Install
+uv tool install mlx-lm
+
+# Serve
+mlx_lm.server --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit --port 8080
 ```
 
-Total RAM: ~18.6GB (model) + ~5GB (KV cache at 32K) = ~24GB. Leaves ~24GB
+The model name in API requests must be the full HuggingFace repo ID
+(`mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit`), not an arbitrary name.
+MLX server returns 401 otherwise.
+
+Total RAM: ~17GB (model) + ~5GB (KV cache at 32K) = ~22GB. Leaves ~26GB
 for macOS and other apps.
 
-Files: `src/klaude/config.py`, `src/klaude/client.py`, `scripts/setup-model.sh`,
-`docs/SETUP-MODEL.md`
+Files: `src/klaude/config.py`, `src/klaude/core/client.py`, `scripts/setup-model.sh`
+
+
+## Note 47: Subpackage Restructure (Phase 12)
+
+### Why
+
+The flat `src/klaude/` directory grew to 20+ modules. Files like `loop.py`,
+`client.py`, `repl.py`, and `plugins.py` were all siblings with no grouping.
+Hard to navigate, hard to understand what depends on what.
+
+### New Layout
+
+```
+src/klaude/
+├── core/           # Engine — the agentic loop and everything it needs
+│   ├── loop.py         Session, turn(), the while-tool-calls loop
+│   ├── client.py       LLMClient, OpenAI SDK wrapper
+│   ├── context.py      ContextTracker, token estimation
+│   ├── compaction.py   Summarize old messages to free context
+│   ├── history.py      MessageHistory, message list management
+│   ├── stream.py       Stream consumer, tool call reassembly
+│   ├── prompt.py       System prompt construction
+│   └── session_store.py  Save/load conversations across sessions
+├── ui/             # User interface — how humans interact
+│   ├── cli.py          Click entry point, --flags
+│   ├── repl.py         Interactive loop, slash commands, readline
+│   ├── render.py       StreamPrinter, syntax-highlighted code blocks
+│   └── status_bar.py   Persistent bottom status line (ANSI scroll regions)
+├── extensions/     # Plug-in systems — optional capabilities
+│   ├── plugins.py      Custom tool plugins (.klaude/tools/*.py)
+│   ├── mcp.py          MCP server bridge
+│   ├── skills.py       Reusable prompt templates
+│   ├── hooks.py        Pre/post tool shell commands
+│   ├── team.py         Agent teams, delegation, message board
+│   └── cron.py         Scheduled recurring tasks
+├── tools/          # All 18 tool implementations + registry
+├── config.py       # .klaude.toml loader
+├── permissions.py  # Safety: denylist, sandbox, prompts
+└── memory.py       # KLAUDE.md project memory
+```
+
+### Principle
+
+Three groups by "who cares about this code":
+- **core/** — the LLM loop cares (called every turn)
+- **ui/** — the human cares (display, input)
+- **extensions/** — optional features (can be removed without breaking core)
+
+`tools/`, `config.py`, `permissions.py`, and `memory.py` stay at the top level
+because they're used across all three groups.
+
+
+## Note 48: CLI Polish — Status Bar, Stream, Sessions (Phase 13)
+
+### Persistent Status Bar
+
+**Problem:** The status line (`Turn 1 | 5,175 / 32,768 tokens (16%) | ...`)
+was printed repeatedly — before every LLM call and after every response. In a
+multi-tool turn, you'd see 5+ status lines scrolling past.
+
+**Solution:** `src/klaude/ui/status_bar.py` — uses ANSI scroll regions to
+reserve the last terminal line for status. All normal output (Rich, streaming,
+readline) stays within the scroll region (lines 1 to rows-1), while the status
+bar persists on row `rows`.
+
+```
+┌─────────────────────────────────────────────────┐
+│  Normal output scrolls here                     │
+│  Tool: read_file  {"path": "src/main.py"}       │
+│  Result: (2,345 chars)                          │
+│  Tool: list_directory  {"path": "."}            │
+│  Result: 15 entries                             │
+├─────────────────────────────────────────────────┤
+│  Turn 1 · 5,175/32,768 tokens (16%) · 24 msgs  │ ← fixed
+└─────────────────────────────────────────────────┘
+```
+
+Key details:
+- `\033[1;{rows-1}r` sets the scroll region
+- Status is drawn with save/restore cursor (`\0337`/`\0338`)
+- SIGWINCH handler re-sets scroll region on terminal resize
+- `atexit` cleanup restores terminal on crash
+- No-op when stdout isn't a TTY (piped output)
+
+### Stream: Tool Call Spinner
+
+**Problem:** When the model returned tool calls (no text), the spinner stopped
+immediately on the first tool call delta. Rich's `Status.stop()` adds a blank
+line via `console.line()`. Then tool call tokens accumulated silently (no visual
+feedback). The user saw: blank lines → pause → burst of tool results.
+
+**Fix:** The spinner only stops for text content now. For tool-call-only
+responses, it stays alive with an updated label:
+
+```
+Thinking...          → first tool call delta arrives
+Calling 1 tool...    → more tool calls stream in
+Calling 3 tools...   → stream ends, spinner stops, tool execution begins
+```
+
+This eliminates the visual gap between "thinking" and tool execution.
+
+Also added `console.print()` after the final text response so the REPL prompt
+doesn't run directly into the last line of model output.
+
+### Session Persistence
+
+**Problem:** Closing klaude lost all conversation history. No way to resume.
+
+**Solution:** `src/klaude/core/session_store.py` — auto-saves conversation to
+`.klaude/sessions/{timestamp}.json` on exit. Keeps last 10 sessions.
+
+Resume:
+- `klaude -c` — resume most recent session
+- `klaude --resume <id>` — resume a specific session
+- `/sessions` — list saved sessions in REPL
+
+What's saved: all messages except the system prompt (which is regenerated
+fresh on resume to pick up KLAUDE.md/tool/config changes), plus turn count
+and a summary (first user message, truncated to 80 chars).
+
+What's NOT saved: system prompt, tool schemas, context tracker state, undo
+snapshots. These are all reconstructed from scratch by `Session.__init__()`,
+then the saved messages are appended via `Session.restore()`.
+
+Files: `src/klaude/core/session_store.py`, `src/klaude/core/loop.py` (restore),
+`src/klaude/ui/cli.py` (-c/--resume), `src/klaude/ui/repl.py` (/sessions)

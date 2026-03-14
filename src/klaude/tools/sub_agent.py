@@ -14,7 +14,7 @@ making multiple tool calls), and returns a text summary. This is useful for:
 See Note 26 in docs/07-implementation-notes.md for design rationale.
 """
 
-from klaude.client import LLMClient
+from klaude.core.client import LLMClient
 from klaude.tools.registry import Tool, ToolRegistry
 from klaude.tools.read_file import tool as read_file_tool
 from klaude.tools.glob_search import tool as glob_tool

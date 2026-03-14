@@ -23,10 +23,10 @@ from functools import lru_cache
 from typing import TYPE_CHECKING, Any
 
 if TYPE_CHECKING:
-    from klaude.client import LLMClient
+    from klaude.core.client import LLMClient
 
 # Qwen3-Coder-30B-A3B context window (matches our llama-server config)
-# 32K with Q4_K_M (18.6GB model + KV cache ≈ 24GB total, fits 48GB Mac)
+# 32K with Q4_K_M + --parallel 1 (17GB model + 3.2GB KV cache ≈ 21GB total, fits 48GB Mac)
 DEFAULT_CONTEXT_WINDOW = 32768
 
 # Rough estimate: 1 token ≈ 4 characters for English/code
@@ -201,3 +201,19 @@ class ContextTracker:
         parts.append(f"conversation: {msg_total:,} in {len(self.message_tokens)} msgs")
 
         return " | ".join(parts)
+
+    def format_compact(self, turn: int) -> str:
+        """Compact one-liner for the persistent status bar."""
+        total = self.total_tokens
+        window = self.context_window
+        pct = self.usage_fraction * 100
+        n_msgs = len(self.message_tokens)
+
+        s = f" Turn {turn} \u00b7 {total:,}/{window:,} tokens ({pct:.0f}%) \u00b7 {n_msgs} msgs"
+
+        if pct >= 95:
+            s += " \u26a0 CRITICAL"
+        elif self.is_warning:
+            s += " \u26a0"
+
+        return s

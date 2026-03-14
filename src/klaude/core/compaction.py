@@ -15,9 +15,9 @@ means we need to be careful not to use too much context for the
 summarization request itself.
 """
 
-from klaude.client import LLMClient
-from klaude.context import ContextTracker
-from klaude.history import MessageHistory
+from klaude.core.client import LLMClient
+from klaude.core.context import ContextTracker
+from klaude.core.history import MessageHistory
 
 # Compact when context usage exceeds this fraction (adaptive by window size)
 COMPACT_THRESHOLD_SMALL = 0.60  # for context_window ≤ 16384

@@ -59,8 +59,9 @@ Larger context = more RAM consumed = slower generation. The default setup uses 3
 
 ## GPU Offloading
 
-- `-ngl 99` offloads all layers to GPU (Apple Silicon unified memory or CUDA)
-- If you get out-of-memory errors, reduce the value: `-ngl 50` keeps some layers on CPU
+- `-ngl 60` is the default — partial GPU offload, avoids OOM at 32K context on 48GB Mac
+- `-ngl 99` offloads all layers but may OOM with large context windows
+- If you get out-of-memory errors, reduce `-ngl` (e.g. `-ngl 40`) or reduce `-c`
 - Apple Silicon: Metal backend is used automatically, no extra flags needed
 
 ## Verification

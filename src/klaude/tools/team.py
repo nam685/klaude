@@ -12,8 +12,8 @@ The LLM client is shared via set_client(), called by Session.__init__.
 See Note 35 in docs/07-implementation-notes.md.
 """
 
-from klaude.client import LLMClient
-from klaude.team import AgentRole, MessageBoard, run_agent
+from klaude.core.client import LLMClient
+from klaude.extensions.team import AgentRole, MessageBoard, run_agent
 from klaude.tools.registry import Tool
 
 # Module-level state — shared across tool calls within a session

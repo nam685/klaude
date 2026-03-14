@@ -60,7 +60,7 @@ class MCPServerConfig:
 class KlaudeConfig:
     """Resolved configuration for a klaude session."""
     # LLM settings
-    model: str = "qwen3-coder-30b-a3b"
+    model: str = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
     base_url: str = "http://localhost:8080/v1"
     api_key: str = "not-needed"
     context_window: int = 32768
