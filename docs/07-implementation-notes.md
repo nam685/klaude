@@ -2992,3 +2992,80 @@ then the saved messages are appended via `Session.restore()`.
 
 Files: `src/klaude/core/session_store.py`, `src/klaude/core/loop.py` (restore),
 `src/klaude/ui/cli.py` (-c/--resume), `src/klaude/ui/repl.py` (/sessions)
+
+---
+
+## Note 49 — Text-Based Tool Call Parsing (Phase 14)
+
+**Problem:** mlx-lm v0.31.1 has built-in tool call parsing — it detects
+`<tool_call>` tokens in model output and converts them to API-level
+`tool_calls` in the response. But this only works when `<tool_call>` is a
+single token in the vocabulary (checked at `tokenizer_utils.py:307`). In
+quantized models (e.g., `Qwen3-Coder-30B-A3B-Instruct-4bit`), this token
+may not exist as a single vocab entry, so tool calling is **silently
+disabled**. The model still generates tool calls — but as text content:
+
+```
+Let me explore the project.
+
+<function=list_directory>
+<parameter=path>.</parameter>
+</function>
+</tool_call>
+```
+
+Our stream consumer only checks `delta.tool_calls` (the API field), so these
+text-based tool calls were printed as raw XML and never executed.
+
+**Solution — two layers:**
+
+1. **Fallback parser** (`tool_call_parser.py`): after streaming ends, if no
+   API-level tool calls were found, scan `result.content` for tool call
+   patterns. Handles two formats:
+   - Qwen3-Coder XML: `<function=NAME><parameter=KEY>VALUE</parameter></function>`
+   - JSON: `<tool_call>{"name": "...", "arguments": {...}}</tool_call>`
+   Parsed tool calls are added to `result.tool_calls` and stripped from content.
+
+2. **Stream suppression** (`stream.py`): buffer content when `<` is seen.
+   If the buffer grows to match `<function=` or `<tool_call>`, suppress all
+   further output and show a "Calling tools..." spinner instead. If the `<`
+   turns out to be regular text (e.g., `<div>`), flush the buffer to the
+   printer. This prevents the raw XML from flashing on screen.
+
+The prefix-matching logic: for each marker (`<function=`, `<tool_call>`),
+check if the buffer ends with any prefix of that marker. If so, keep
+buffering. If no marker can match, flush immediately.
+
+Files: `src/klaude/core/tool_call_parser.py`, `src/klaude/core/stream.py`
+
+---
+
+## Note 50 — Markdown Rendering + max_tokens Fix (Phase 14)
+
+**Markdown rendering:** The `StreamPrinter` already handled code fences with
+syntax highlighting, but regular markdown (bold, italic, headers, lists) was
+printed as raw text. Added `_md_line()` which converts a complete line:
+
+- Escape Rich markup chars first (`rich.markup.escape`)
+- Headers (`# text`) → `[bold]text[/bold]`
+- Unordered lists (`- item`) → `  • item`
+- Ordered lists (`1. item`) → formatted
+- Horizontal rules (`---`) → dim line
+- Then inline: `` `code` `` → cyan, `**bold**` → bold, `*italic*` → italic
+
+Order matters: escape first, then block-level checks, then inline. Inline
+code is converted before bold/italic to avoid conflicts.
+
+File: `src/klaude/ui/render.py`
+
+**max_tokens fix:** mlx-lm server defaults to `--max-tokens 512` (found in
+server.py argument parser). Without sending `max_tokens` in the API request,
+every response was capped at 512 tokens — causing premature cutoff. Fixed by
+sending `max_tokens=8192` in every chat/chat_stream request.
+
+File: `src/klaude/core/client.py`
+
+**8-bit model switch:** Upgraded default from `Instruct-4bit` (~17GB) to
+`Instruct-8bit` (~30GB). Same architecture and speed (MoE, 3B active), but
+noticeably better output quality. Fits 48GB M4 Pro with 32K context (~35GB
+total). Updated all references across 13 files.
