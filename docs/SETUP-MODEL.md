@@ -1,70 +1,42 @@
 # Setting Up the LLM Model
 
-klaude uses a local LLM served via an OpenAI-compatible API. The recommended model is **Qwen3-Coder-30B-A3B**.
+klaude uses a local LLM served via an OpenAI-compatible API.
 
-## Model Overview
+## Recommended: Qwen3-Coder-30B-A3B on mlx-lm
 
-**Qwen3-Coder-30B-A3B**
+**Model:** `mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit` (~17GB)
 
-- 30B total parameters, 3B active (Mixture-of-Experts architecture)
-- 128K context window (native)
-- MIT license
-- Built for agentic coding: tool calling, file editing, bash execution
-- HuggingFace: `unsloth/Qwen3-Coder-30B-A3B-Instruct-GGUF`
+- 30B total parameters, 3B active (MoE) — fast inference
+- 128K native context, 32K practical with 48GB RAM
+- MIT license, strong coding benchmarks, native tool calling
+- Served via mlx-lm (Apple's ML framework for Apple Silicon)
 
-## Quantization Options
-
-| Quant | Size | RAM needed | Quality | Recommendation |
-|-------|------|------------|---------|----------------|
-| Q3_K_M | ~14GB | ~16GB | Good | Budget option |
-| Q4_K_M | ~18.6GB | ~21GB | Best | **Recommended for 48GB Mac** |
-| Q6_K | ~24GB | ~27GB | Great | Needs 32GB+ |
-| Q8_0 | ~32GB | ~35GB | Excellent | Needs 48GB+ |
-
-## Quick Setup (macOS with Homebrew)
+### Quick Setup
 
 ```bash
-# Install llama.cpp
-brew install llama.cpp
-
-# Download and start server (uses the included setup script)
-./scripts/setup-model.sh           # downloads Q4_K_M by default
-./scripts/setup-model.sh Q3_K_M   # or pick a different quantization
+# Install mlx-lm + download model (~17GB)
+./scripts/setup-model.sh
 
 # Start the server
 ./scripts/setup-model.sh --serve
 ```
 
-## Manual Server Start
+### Manual Setup
 
 ```bash
-llama-server \
-  -m ~/models/Qwen3-Coder-30B-A3B-Instruct-Q4_K_M.gguf \
-  --port 8080 \
-  -c 32768 \
-  -ngl 99
+# Install mlx-lm
+uv tool install mlx-lm
+
+# Download model
+hf download mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit
+
+# Start server
+mlx_lm.server \
+  --model mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit \
+  --port 8080
 ```
 
-## Context Size Tuning
-
-The `-c` flag controls the server-side KV cache (how many tokens the model can hold in memory at once).
-
-| `-c` value | Tokens | Notes |
-|------------|--------|-------|
-| `-c 8192` | 8K | Minimum, saves RAM |
-| `-c 32768` | 32K | **Recommended** for 48GB Mac with Q4_K_M |
-| `-c 65536` | 64K | Needs 48GB+ RAM headroom |
-
-Larger context = more RAM consumed = slower generation. The default setup uses 32K (~24GB total RAM with Q4_K_M), leaving headroom on a 48GB machine.
-
-## GPU Offloading
-
-- `-ngl 60` is the default — partial GPU offload, avoids OOM at 32K context on 48GB Mac
-- `-ngl 99` offloads all layers but may OOM with large context windows
-- If you get out-of-memory errors, reduce `-ngl` (e.g. `-ngl 40`) or reduce `-c`
-- Apple Silicon: Metal backend is used automatically, no extra flags needed
-
-## Verification
+### Verify
 
 ```bash
 # Check server is running
@@ -73,16 +45,54 @@ curl http://localhost:8080/v1/models
 # Test a completion
 curl http://localhost:8080/v1/chat/completions \
   -H "Content-Type: application/json" \
-  -d '{"model": "qwen3-coder-30b-a3b", "messages": [{"role": "user", "content": "Hello"}]}'
+  -d '{
+    "model": "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit",
+    "messages": [{"role": "user", "content": "Hello"}]
+  }'
 ```
+
+### Memory Usage
+
+| Component | RAM |
+|-----------|-----|
+| Model (4-bit) | ~17GB |
+| KV cache (32K context) | ~5GB |
+| **Total** | **~22GB** |
+
+Fits comfortably on a 48GB Mac with ~26GB left for macOS and apps.
 
 ## Alternative Models
 
-klaude works with any OpenAI-compatible API endpoint. Other capable coding models:
+klaude works with any OpenAI-compatible API. Set `base_url` and `model`
+in `.klaude.toml` or via CLI flags:
 
-- **Qwen3-Coder-Next** (80B MoE, Apache 2.0) — previous recommendation; 36GB Q3_K_M, tight fit on 48GB
-- **Qwen2.5-Coder-32B** — smaller, still strong at coding, fits comfortably on 48GB
-- **DeepSeek-Coder-V2** — another MoE model, similar memory profile
-- Any model served via **vLLM**, **Ollama**, or other OpenAI-compatible servers
+```bash
+klaude --base-url https://api.openai.com/v1 --model gpt-4o "your task"
+```
 
-To point klaude at a different server or model, set the `base_url` and `model` in your config.
+Other local options:
+- **Ollama** — `ollama serve`, set `--base-url http://localhost:11434/v1`
+- **vLLM** — for NVIDIA GPUs
+- **llama.cpp** — `llama-server` (note: has grammar crash issues with tool calling, see Note 46)
+
+## Proxy Issues
+
+If downloads fail with SOCKS proxy errors, unset proxy vars first:
+
+```bash
+unset ALL_PROXY all_proxy HTTPS_PROXY https_proxy HTTP_PROXY http_proxy
+./scripts/setup-model.sh
+```
+
+## Config File
+
+Instead of CLI flags, put your model settings in `.klaude.toml`:
+
+```toml
+[default]
+model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
+base_url = "http://localhost:8080/v1"
+context_window = 32768
+```
+
+See `docs/examples/` for more config examples.
