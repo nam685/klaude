@@ -196,4 +196,16 @@ def consume_stream(
     for idx in sorted(tool_calls_by_index):
         result.tool_calls.append(tool_calls_by_index[idx])
 
+    # Fallback: if no API-level tool calls were detected, check text content
+    # for model-native tool call markup (e.g., Qwen3-Coder's <function=...>
+    # format).  This happens when the LLM server doesn't convert text-based
+    # tool calls to the OpenAI tool_calls API format.
+    if not result.has_tool_calls and result.content:
+        from klaude.core.tool_call_parser import parse_tool_calls_from_text
+
+        cleaned, text_tool_calls = parse_tool_calls_from_text(result.content)
+        if text_tool_calls:
+            result.content = cleaned
+            result.tool_calls = text_tool_calls
+
     return result
