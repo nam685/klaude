@@ -2295,3 +2295,412 @@ Also initialized the git repo as part of Phase 9. Steps taken:
 - 1 `.gitignore`
 - 47 files tracked in initial git staging
 - Approximately 900 lines of new documentation total
+
+## Note 37: Web Search & Ask User — New Tools (Phase 10)
+
+### Overview
+
+Phase 10 adds Claude Code parity features. The first batch: `web_search`
+(keyword search, not just URL fetch) and `ask_user` (structured question
+with guaranteed response). Both are classified as SAFE tools — no
+permission prompt needed.
+
+### web_search — DuckDuckGo HTML Scraping
+
+The key design question: how to do keyword search without an API key?
+
+**Options considered:**
+1. Google Custom Search API — requires API key + project setup
+2. Bing Search API — requires Azure subscription
+3. SearXNG — self-hosted, but requires running another service
+4. DuckDuckGo HTML endpoint — no API key, returns parseable HTML
+
+We chose option 4. DuckDuckGo's `html.duckduckgo.com/html/` endpoint
+returns a simplified HTML page with search results. No JavaScript
+rendering, no API key, no rate limiting (within reason).
+
+**Parsing strategy:** Three-tier regex extraction with progressive fallback:
+
+```
+Tier 1: result-link + result-snippet class patterns
+Tier 2: rel="nofollow" links + snippet classes
+Tier 3: raw href extraction (any http link with text > 5 chars)
+```
+
+Each tier catches a different HTML structure DuckDuckGo might serve.
+The fallback chain means the tool degrades gracefully rather than
+returning "no results" when the HTML format changes slightly.
+
+**Output format:** Numbered list with title, URL, and snippet for each
+result. Ends with a hint to use `web_fetch` to read the full page. This
+creates a natural two-step workflow: search → fetch.
+
+```
+1. Python subprocess — Real Python
+   URL: https://realpython.com/python-subprocess/
+   The subprocess module allows you to spawn new processes...
+```
+
+**Uses httpx** (already a transitive dependency via openai) — zero new
+packages added.
+
+### ask_user — Structured User Interaction
+
+Without `ask_user`, the model's only way to ask a question is to emit
+text and hope the user reads it and responds on the next turn. This is
+fragile: the model might emit a question buried in a long response, or
+the user might not realize a response is expected.
+
+`ask_user` makes the interaction explicit:
+1. Model calls `ask_user(question="Which database?")`
+2. Tool renders the question in a yellow `rich.Panel`
+3. User types their answer at the `Your answer: ` prompt
+4. Answer returns as the tool result — model sees it immediately
+
+**Console sharing:** The tool needs a `rich.Console` for styled output.
+We use the same module-level pattern as `sub_agent` — `set_console()` is
+called by `Session.__init__()` so the tool shares the session's console.
+
+**Edge cases:** EOF (Ctrl+D) returns "(user ended input)". Ctrl+C returns
+"(user cancelled)". Empty response returns "(user gave no response)".
+All three are distinguishable by the model so it can react appropriately.
+
+### Safety Classification
+
+Both tools are in `SAFE_TOOLS` — no permission prompt:
+- `web_search`: read-only, outbound HTTP only, no file system access
+- `ask_user`: only reads from stdin, no side effects
+
+## Note 38: Plan Mode — Read-Only Toggle (Phase 10)
+
+### Overview
+
+Plan mode restricts the agent to read-only tools. When active, the model
+can explore code, search, discuss plans, and ask questions — but cannot
+write files, run commands, or commit. This is useful for:
+
+- **Safe exploration**: let the model investigate before you approve changes
+- **Architecture discussion**: plan multi-file changes without risk
+- **Code review**: read and analyze without accidental modifications
+
+### Implementation
+
+Plan mode is a boolean flag on `PermissionManager`:
+
+```python
+self.plan_mode = False  # toggled by /plan REPL command
+```
+
+When active, `check_tool()` blocks any tool in `PLAN_MODE_BLOCKED` before
+the permission prompt even fires:
+
+```python
+PLAN_MODE_BLOCKED = {"bash", "write_file", "edit_file", "git_commit", "team_delegate"}
+```
+
+The block happens at the same level as command denylist and path sandboxing —
+the model receives an error message explaining why the tool was blocked, and
+it can adapt (e.g., describe what it would do instead of doing it).
+
+**Why block `team_delegate`?** Team members can have `readwrite` or `full`
+access tiers. Delegating to them would bypass plan mode's restrictions.
+
+**What stays allowed:** All read tools (`read_file`, `glob`, `grep`,
+`list_directory`, `git_status`, `git_diff`, `git_log`), research tools
+(`sub_agent`, `web_search`, `web_fetch`), planning tools (`task_list`),
+interaction tools (`ask_user`), and team coordination (`team_create`,
+`team_message`). The model can do everything except modify state.
+
+### REPL Integration
+
+- `/plan` toggles the flag on/off
+- Prompt changes: `klaude>` → `klaude[plan]>` — visual indicator
+- The toggle is instant — no history clearing, no session restart
+- Switching off restores full access immediately
+
+### Comparison with Claude Code
+
+Claude Code's plan mode (`EnterPlanMode`/`ExitPlanMode`) is a tool the
+model calls itself. klaude's is user-controlled via `/plan`. The user
+decides when to restrict the model, not the other way around. This is
+a deliberate choice: the user is the trust boundary.
+
+## Note 39: LSP Tool — Code Intelligence (Phase 10)
+
+### Overview
+
+The `lsp` tool provides go-to-definition, find-references, and diagnostics
+without requiring a running language server process. It uses a two-tier
+approach: jedi for Python (accurate, AST-based), grep for everything else.
+
+### Why Not a Real LSP Client?
+
+A proper LSP client would need to:
+1. Start a language server process (pyright, tsserver, gopls, etc.)
+2. Send `initialize`, wait for capabilities
+3. Open documents, wait for diagnostics
+4. Send `textDocument/definition` requests
+5. Keep the server alive for the session
+
+That's a lot of complexity for a tool that the model calls occasionally.
+Instead, we use two approaches that give 80% of the value:
+
+**Python (jedi):** The `jedi` library does static analysis directly —
+no server process needed. One function call gives you definitions,
+references, or completions. It understands imports, class hierarchies,
+decorators, and most Python patterns. jedi is optional — if not installed,
+Python falls back to grep.
+
+**Everything else (grep):** We search for common definition patterns:
+```
+(def|func|function|fn)\s+SYMBOL\b    # function definitions
+class\s+SYMBOL\b                      # class definitions
+(const|let|var|val)\s+SYMBOL\b        # variable declarations
+type\s+SYMBOL\b                       # type definitions
+interface\s+SYMBOL\b                  # interface definitions
+```
+
+This catches most definitions in Python, JavaScript, TypeScript, Go, Rust,
+Java, Ruby, C, and C++. For references, we use word-boundary grep (`-w`).
+
+### Parameter Design
+
+The tool accepts flexible parameters to handle both tiers:
+
+- **Python with jedi:** `action="definition" path="foo.py" line=42 column=10`
+  — precise cursor-position query
+- **Grep fallback:** `action="definition" symbol="MyClass"` — searches the
+  working directory for definition patterns
+- **Diagnostics:** `action="diagnostics" path="foo.py"` — syntax check
+  (Python compile() or jedi)
+
+If `path` + `line` are given for a Python file and jedi is available, we
+use jedi. Otherwise, we extract the symbol at the given position and fall
+back to grep. If only `symbol` is given, we go straight to grep.
+
+### Safety Classification
+
+`lsp` is a SAFE tool — it only reads files and runs grep (never modifies
+anything). No permission prompt needed.
+
+## Note 40: Notebook Edit — Jupyter Integration (Phase 10)
+
+### Overview
+
+The `notebook_edit` tool reads, edits, inserts cells into, and executes
+Jupyter notebooks (.ipynb files). It works directly with the JSON format
+— no dependency on `jupyter` or `nbformat` for read/edit/insert.
+Execution optionally uses `jupyter nbconvert` if available.
+
+### .ipynb Format
+
+A Jupyter notebook is just a JSON file:
+
+```json
+{
+  "cells": [
+    {
+      "cell_type": "code",
+      "source": ["import os\n", "print(os.getcwd())"],
+      "metadata": {},
+      "execution_count": 1,
+      "outputs": [{"output_type": "stream", "text": ["/home/user"]}]
+    },
+    {
+      "cell_type": "markdown",
+      "source": ["# Hello"],
+      "metadata": {}
+    }
+  ],
+  "metadata": { "kernelspec": {...}, "language_info": {...} },
+  "nbformat": 4,
+  "nbformat_minor": 5
+}
+```
+
+Key detail: `source` is a **list of lines** (each ending with `\n`),
+not a single string. We handle this conversion transparently — the model
+provides content as a plain string, and we split it into the list format
+that notebooks expect.
+
+### Four Actions
+
+1. **read**: Parse the notebook and display cells with their outputs.
+   Can read all cells or a specific cell by index. Output includes cell
+   type, source, and any execution outputs (text, errors, images).
+
+2. **edit**: Modify a cell's source content and optionally change its
+   type. Requires `cell_index` and `content`.
+
+3. **insert**: Add a new cell at a specific position (or at the end).
+   Creates proper cell structure with metadata and empty outputs.
+
+4. **execute**: Run the notebook via `jupyter nbconvert --execute --inplace`.
+   This requires jupyter to be installed. After execution, re-reads the
+   notebook to show outputs. Timeout: 120 seconds.
+
+### Safety Classification
+
+`notebook_edit` is classified as DANGEROUS — it writes to .ipynb files
+and can execute code. Requires user approval.
+
+## Note 41: Background Tasks — Non-Blocking Sub-Agents (Phase 10)
+
+### Overview
+
+Background tasks let the model launch sub-agents that run in parallel
+without blocking the main conversation. The model can start multiple
+research tasks, continue talking with the user, and check results later.
+
+### Architecture
+
+```
+Main thread (agentic loop)
+  │
+  ├─ background_task(action="start", task="explore auth code")
+  │     └─ spawns Thread-1 → runs handle_sub_agent()
+  │
+  ├─ background_task(action="start", task="read all test files")
+  │     └─ spawns Thread-2 → runs handle_sub_agent()
+  │
+  ├─ (continues working on other things...)
+  │
+  ├─ background_task(action="status")
+  │     └─ returns: "bg-1: completed (4.2s), bg-2: running (2.1s)"
+  │
+  └─ background_task(action="result", task_id="bg-1")
+        └─ returns the sub-agent's findings
+```
+
+### Why Threads, Not Processes?
+
+Sub-agents share the `LLMClient` connection pool. With threads, this
+sharing is free — all threads use the same httpx client. With processes,
+we'd need to either serialize the client (not possible) or create new
+connections per process (wasteful).
+
+The GIL isn't a problem because sub-agents are I/O-bound (waiting for
+LLM API responses, reading files). Python releases the GIL during I/O.
+
+### Thread Safety
+
+The job store (`_jobs`) is protected by a `threading.Lock`. Each job is
+a `BackgroundJob` dataclass with `status`, `result`, `started_at`, and
+`finished_at`. The lock is held only for brief dict operations — no risk
+of contention.
+
+Threads are daemonic (`daemon=True`) so they don't prevent the process
+from exiting when the user quits the REPL.
+
+### Safety Classification
+
+`background_task` is SAFE — it delegates to `handle_sub_agent`, which
+only has read-only tools. A background task cannot write files, run
+commands, or commit.
+
+## Note 42: Git Worktrees — Isolated Working Directories (Phase 10)
+
+### Overview
+
+Git worktrees let you have multiple working directories from a single
+repository. Each worktree has its own branch and working copy, but they
+share the same `.git` directory (object store, refs, config).
+
+```
+repo/                          # main worktree (your work)
+../.klaude-worktree-refactor/  # agent worktree (klaude/refactor branch)
+../.klaude-worktree-fix-bug/   # agent worktree (klaude/fix-bug branch)
+```
+
+### Operations
+
+1. **create**: Creates a new worktree alongside the repo directory.
+   - Branch: `klaude/<name>` (auto-created from HEAD or specified base)
+   - Path: `../.klaude-worktree-<name>` (adjacent to repo root)
+   - If the branch already exists, attaches to it instead of creating
+
+2. **list**: Shows all worktrees with their paths, branches, and HEAD SHAs.
+   Uses `git worktree list --porcelain` for machine-parseable output.
+
+3. **remove**: Removes a worktree and deletes its branch.
+   Uses `--force` to handle unclean worktrees. Branch deletion is
+   best-effort (may fail if it's the current branch elsewhere).
+
+### Naming Convention
+
+All klaude worktrees use the `klaude/` branch prefix and
+`.klaude-worktree-` path prefix. This makes them easy to identify and
+clean up — you can `git worktree list | grep klaude` to find them all.
+
+### Safety Classification
+
+`worktree` is DANGEROUS — it creates branches and directories, and
+`remove` deletes them. Requires user approval. This is appropriate
+because worktrees affect shared git state.
+
+## Note 43: Cron — Scheduled Recurring Tasks (Phase 10)
+
+### Overview
+
+The cron system runs prompts or skills on a recurring interval within a
+REPL session. It's not a system-level cron — it starts and stops with
+the session.
+
+### Usage
+
+```
+/cron 5m /review          # run /review every 5 minutes
+/cron 30s git_status      # check git status every 30 seconds
+/cron list                # show active jobs
+/cron stop cron-1         # stop a specific job
+/cron stop all            # stop all jobs
+```
+
+### Architecture
+
+Each cron job uses a `threading.Timer` chain:
+
+```python
+def _schedule_next(job):
+    def _tick():
+        job.run_count += 1
+        _run_callback(job.prompt)   # runs session.turn()
+        _schedule_next(job)         # schedule next tick
+    timer = Timer(job.interval_seconds, _tick)
+    timer.daemon = True
+    timer.start()
+```
+
+This is a "self-rescheduling timer" pattern. After each tick, the callback
+schedules the next one. This avoids the complexity of a scheduler thread
+and handles variable execution times naturally (the interval is measured
+from the end of one execution to the start of the next).
+
+### REPL Integration
+
+The REPL sets a callback function (`session.turn`) that cron jobs use to
+run prompts. This decouples cron from the session — cron.py doesn't import
+loop.py, and the callback is injected at REPL startup.
+
+On REPL exit, `stop_all()` is called to cancel all pending timers. Since
+timers are daemonic, they'd be killed on process exit anyway, but explicit
+cleanup is cleaner.
+
+### Interval Parsing
+
+Supports `30s`, `5m`, `1h`, or plain numbers (treated as minutes).
+Minimum interval: 10 seconds (prevents accidental flooding).
+
+### Thread Safety Concern
+
+Cron callbacks run `session.turn()` from a timer thread, while the main
+thread might also be running `session.turn()` from user input. The session
+is not thread-safe — concurrent turns could corrupt message history.
+
+In practice, this is acceptable because:
+1. Cron intervals are typically minutes, not seconds
+2. The user is usually idle when a cron job fires
+3. The worst case is garbled output, not data loss
+
+A production system would need a mutex or message queue, but for an
+educational project this trade-off is reasonable.

@@ -27,8 +27,11 @@ from rich.syntax import Syntax
 
 # --- Tool classification ---
 
-SAFE_TOOLS = {"read_file", "glob", "grep", "list_directory", "git_status", "git_diff", "git_log", "task_list", "sub_agent", "web_fetch"}
-DANGEROUS_TOOLS = {"bash", "write_file", "edit_file", "git_commit"}
+SAFE_TOOLS = {"read_file", "glob", "grep", "list_directory", "git_status", "git_diff", "git_log", "task_list", "sub_agent", "web_fetch", "web_search", "ask_user", "lsp", "background_task"}
+DANGEROUS_TOOLS = {"bash", "write_file", "edit_file", "git_commit", "notebook_edit", "worktree"}
+
+# Tools blocked in plan mode (write/execute tools)
+PLAN_MODE_BLOCKED = {"bash", "write_file", "edit_file", "git_commit", "team_delegate"}
 
 # --- Command denylist (always blocked, even with user approval) ---
 
@@ -117,6 +120,7 @@ class PermissionManager:
     Modes:
     - interactive (default): prompts user for dangerous operations
     - auto_approve: skips prompts (for testing or trusted contexts)
+    - plan_mode: blocks all write/execute tools (read-only)
     """
 
     def __init__(
@@ -128,6 +132,7 @@ class PermissionManager:
         self.console = console
         self.auto_approve = auto_approve
         self.working_dir = working_dir or os.getcwd()
+        self.plan_mode = False
 
     def check_tool(self, tool_name: str, arguments_json: str) -> str | None:
         """Check if a tool call is allowed.
@@ -143,6 +148,10 @@ class PermissionManager:
             args = json.loads(arguments_json)
         except json.JSONDecodeError:
             return None  # let the registry handle bad JSON
+
+        # --- Plan mode blocks ---
+        if self.plan_mode and tool_name in PLAN_MODE_BLOCKED:
+            return f"Blocked: plan mode is active — {tool_name} is not allowed (read-only)"
 
         # --- Bash denylist ---
         if tool_name == "bash":

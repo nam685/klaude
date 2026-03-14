@@ -52,6 +52,12 @@ from klaude.tools.team import (
     set_client as set_team_client,
 )
 from klaude.tools.web_fetch import tool as web_fetch_tool
+from klaude.tools.web_search import tool as web_search_tool
+from klaude.tools.ask_user import tool as ask_user_tool, set_console as set_ask_user_console
+from klaude.tools.lsp import tool as lsp_tool
+from klaude.tools.notebook_edit import tool as notebook_edit_tool
+from klaude.tools.background_task import tool as background_task_tool
+from klaude.tools.worktree import tool as worktree_tool
 
 # Maximum iterations per turn to prevent infinite loops (safety valve)
 MAX_ITERATIONS = 50
@@ -74,6 +80,12 @@ def create_registry() -> ToolRegistry:
     registry.register(task_list_tool)
     registry.register(sub_agent_tool)
     registry.register(web_fetch_tool)
+    registry.register(web_search_tool)
+    registry.register(ask_user_tool)
+    registry.register(lsp_tool)
+    registry.register(notebook_edit_tool)
+    registry.register(background_task_tool)
+    registry.register(worktree_tool)
     registry.register(team_create_tool)
     registry.register(team_delegate_tool)
     registry.register(team_message_tool)
@@ -101,6 +113,7 @@ class Session:
         self.console = console or Console()
         set_sub_agent_client(self.client)  # share client with sub-agents
         set_team_client(self.client)  # share client with team agents
+        set_ask_user_console(self.console)  # share console with ask_user tool
         self.registry = create_registry()
 
         # Load custom tool plugins from .klaude/tools/

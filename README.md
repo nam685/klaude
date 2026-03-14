@@ -44,9 +44,9 @@ Prerequisites: Python 3.12+, [uv](https://docs.astral.sh/uv/), [llama.cpp](https
 
 ## Features
 
-**17 built-in tools** — read/write/edit files, run bash commands, glob/grep search, git operations, task planning, sub-agents, web fetch, agent teams
+**23 built-in tools** — read/write/edit files, run bash commands, glob/grep search, git operations, task planning, sub-agents, web search & fetch, ask user, LSP code intelligence, notebook editing, background tasks, git worktrees, agent teams
 
-**Interactive REPL** — multi-turn conversations with history, slash commands (`/commit`, `/review`, `/explain`), Esc to undo, Ctrl+C to interrupt
+**Interactive REPL** — multi-turn conversations with history, slash commands (`/commit`, `/review`, `/explain`), plan mode (`/plan`), cron scheduling (`/cron`), Esc to undo, Ctrl+C to interrupt
 
 **Context management** — token counting, automatic history compaction, project memory via `KLAUDE.md`
 
@@ -97,7 +97,7 @@ src/klaude/
   history.py       Message history management
   compaction.py    Automatic context compaction
   memory.py        KLAUDE.md project memory
-  permissions.py   Safety: prompts, denylist, sandboxing
+  permissions.py   Safety: prompts, denylist, sandboxing, plan mode
   stream.py        Streaming output + tool call accumulation
   render.py        Syntax-highlighted code blocks
   repl.py          Interactive REPL with readline
@@ -106,15 +106,18 @@ src/klaude/
   hooks.py         Pre/post tool execution hooks
   mcp.py           MCP server integration
   team.py          Agent teams (roles, message board)
+  cron.py          Scheduled recurring tasks (/cron)
   tools/
     registry.py    Tool registry + dispatcher
     read_file.py   bash.py   glob_search.py   grep_search.py
     write_file.py  edit_file.py  list_directory.py
     git.py         task_list.py  sub_agent.py  web_fetch.py
+    web_search.py  ask_user.py   lsp.py        notebook_edit.py
+    background_task.py  worktree.py
     team.py        Team tools (create, delegate, message)
 ```
 
-33 Python files, ~4,000 lines. 4 dependencies.
+40 Python files, ~5,300 lines. 4 dependencies.
 
 ## Documentation
 
@@ -137,7 +140,7 @@ src/klaude/
 | [04-qwen3-coder-next.md](docs/04-qwen3-coder-next.md) | Model guide |
 | [05-architecture-decisions.md](docs/05-architecture-decisions.md) | ADRs |
 | [06-hardware-guide.md](docs/06-hardware-guide.md) | Hardware recommendations |
-| [07-implementation-notes.md](docs/07-implementation-notes.md) | 36 implementation notes |
+| [07-implementation-notes.md](docs/07-implementation-notes.md) | 43 implementation notes |
 
 ## License
 
