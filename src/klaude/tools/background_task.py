@@ -111,15 +111,7 @@ def handle_background_task(
 
 tool = Tool(
     name="background_task",
-    description=(
-        "Run sub-agents in the background without blocking. "
-        "Actions: 'start' (launch a task, returns task_id), "
-        "'status' (check progress of one or all tasks), "
-        "'result' (get the output of a completed task). "
-        "Background tasks have the same read-only tools as sub_agent. "
-        "Use for: parallel research, long-running exploration, or tasks you "
-        "want to check on later."
-    ),
+    description="Run sub-agents in background. Actions: start, status, result.",
     parameters={
         "type": "object",
         "properties": {

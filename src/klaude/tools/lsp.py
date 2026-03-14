@@ -239,15 +239,7 @@ def handle_lsp(
 
 tool = Tool(
     name="lsp",
-    description=(
-        "Code intelligence queries: go-to-definition, find-references, and diagnostics. "
-        "For Python files with jedi installed, provides accurate AST-based results using "
-        "file path + line + column. For other languages, falls back to grep-based pattern "
-        "matching using a symbol name. "
-        "Actions: 'definition' (find where a symbol is defined), "
-        "'references' (find all usages of a symbol), "
-        "'diagnostics' (check a file for errors)."
-    ),
+    description="Code intelligence: go-to-definition, find-references, diagnostics.",
     parameters={
         "type": "object",
         "properties": {

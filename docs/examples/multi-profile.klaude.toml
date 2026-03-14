@@ -5,9 +5,9 @@
 #   uv run klaude --profile ollama "task"   # uses [profiles.ollama]
 
 [default]
-model = "qwen3-coder-next"
+model = "qwen3-coder-30b-a3b"
 base_url = "http://localhost:8080/v1"
-context_window = 65536
+context_window = 32768
 
 [profiles.openai]
 model = "gpt-4o"

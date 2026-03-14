@@ -107,23 +107,12 @@ def set_client(client: LLMClient) -> None:
 
 tool = Tool(
     name="sub_agent",
-    description=(
-        "Spawn a separate LLM conversation for research or subtasks. "
-        "The sub-agent has read-only access to the codebase (read_file, glob, grep, "
-        "list_directory, git_status, git_diff, git_log) but cannot write files or "
-        "run commands. Give it a clear, focused task and it will return findings. "
-        "Use for: exploring unfamiliar code, investigating questions, or isolating "
-        "research that would clutter your main context."
-    ),
+    description="Spawn a read-only sub-agent for research or exploration.",
     parameters={
         "type": "object",
         "properties": {
             "task": {
                 "type": "string",
-                "description": (
-                    "A clear description of what the sub-agent should research or figure out. "
-                    "Be specific — include file paths, function names, or patterns to look for."
-                ),
             }
         },
         "required": ["task"],

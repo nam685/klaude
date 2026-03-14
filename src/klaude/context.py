@@ -15,13 +15,19 @@ The per-message overhead (~4 tokens) accounts for the role label, message
 delimiters, and other formatting that the model sees but isn't in the content.
 """
 
+from __future__ import annotations
+
 import json
 from dataclasses import dataclass, field
-from typing import Any
+from functools import lru_cache
+from typing import TYPE_CHECKING, Any
 
-# Qwen3-Coder-Next context window (matches our llama-server config)
-# 8K is safe for 48GB Mac with Q3_K_M (36GB model + KV cache must fit in RAM)
-DEFAULT_CONTEXT_WINDOW = 8192
+if TYPE_CHECKING:
+    from klaude.client import LLMClient
+
+# Qwen3-Coder-30B-A3B context window (matches our llama-server config)
+# 32K with Q4_K_M (18.6GB model + KV cache ≈ 24GB total, fits 48GB Mac)
+DEFAULT_CONTEXT_WINDOW = 32768
 
 # Rough estimate: 1 token ≈ 4 characters for English/code
 CHARS_PER_TOKEN = 4
@@ -41,6 +47,28 @@ def estimate_tokens(text: str) -> int:
     some are 6+ chars (common words). It averages out.
     """
     return max(1, len(text) // CHARS_PER_TOKEN)
+
+
+# Cache for exact tokenization results (system prompt, tool schemas repeat every call)
+_token_count_cache: dict[str, int] = {}
+
+
+def exact_token_count(text: str, client: LLMClient) -> int:
+    """Get exact token count via llama-server /tokenize endpoint.
+
+    Caches results for repeated strings (system prompt, tool schemas).
+    Falls back to chars/4 estimate if endpoint is unavailable.
+    """
+    if text in _token_count_cache:
+        return _token_count_cache[text]
+
+    tokens = client.tokenize(text)
+    if tokens is not None:
+        count = len(tokens)
+        _token_count_cache[text] = count
+        return count
+
+    return estimate_tokens(text)
 
 
 def estimate_message_tokens(message: dict[str, Any]) -> int:
@@ -86,10 +114,8 @@ class ContextTracker:
     """Tracks token usage across the conversation.
 
     Usage:
-        tracker = ContextTracker(context_window=65536)
+        tracker = ContextTracker(context_window=32768)
         tracker.set_tool_overhead(tool_schemas)
-        tracker.add_message({"role": "system", "content": "..."})
-        tracker.add_message({"role": "user", "content": "..."})
         # After each LLM turn:
         tracker.update(messages)
         print(tracker.format_status())
@@ -98,6 +124,7 @@ class ContextTracker:
     context_window: int = DEFAULT_CONTEXT_WINDOW
     message_tokens: list[int] = field(default_factory=list)
     tool_overhead: int = 0
+    _client: LLMClient | None = field(default=None, repr=False)
 
     @property
     def total_tokens(self) -> int:
@@ -116,9 +143,17 @@ class ContextTracker:
         """Whether usage has crossed the warning threshold."""
         return self.usage_fraction >= WARN_THRESHOLD
 
+    def set_client(self, client: LLMClient) -> None:
+        """Set client for exact tokenization via /tokenize."""
+        self._client = client
+
     def set_tool_overhead(self, tool_schemas: list[dict[str, Any]]) -> None:
         """Calculate and store the token overhead from tool definitions."""
-        self.tool_overhead = estimate_tools_tokens(tool_schemas)
+        if self._client:
+            schema_json = json.dumps(tool_schemas)
+            self.tool_overhead = exact_token_count(schema_json, self._client)
+        else:
+            self.tool_overhead = estimate_tools_tokens(tool_schemas)
 
     def update(self, messages: list[dict[str, Any]]) -> None:
         """Recalculate token counts from the full message list.

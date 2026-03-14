@@ -61,18 +61,12 @@ def handle_edit_file(path: str, old_string: str, new_string: str) -> str:
 
 tool = Tool(
     name="edit_file",
-    description=(
-        "Edit a file by replacing an exact string match. Provide old_string (the text "
-        "to find) and new_string (the replacement). The old_string must appear exactly "
-        "once in the file — include enough surrounding context to make it unique. "
-        "Preserves all other file content unchanged."
-    ),
+    description="Replace an exact string match in a file. old_string must be unique.",
     parameters={
         "type": "object",
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Absolute path to the file to edit",
             },
             "old_string": {
                 "type": "string",

@@ -105,10 +105,7 @@ def handle_git_commit(message: str, files: Optional[list[str]] = None) -> str:
 
 git_status_tool = Tool(
     name="git_status",
-    description=(
-        "Show the current git branch and working-tree status (git status --short). "
-        "Read-only — does not modify the repository."
-    ),
+    description="Show current branch and working-tree status.",
     parameters={
         "type": "object",
         "properties": {},
@@ -119,13 +116,7 @@ git_status_tool = Tool(
 
 git_diff_tool = Tool(
     name="git_diff",
-    description=(
-        "Show git diff output. "
-        "Pass target='staged' for staged changes (git diff --cached), "
-        "a branch name or commit hash to diff against that ref, "
-        "or omit target for unstaged working-tree changes. "
-        "Read-only — does not modify the repository."
-    ),
+    description="Show git diff. target: 'staged', a ref, or omit for unstaged.",
     parameters={
         "type": "object",
         "properties": {
@@ -144,10 +135,7 @@ git_diff_tool = Tool(
 
 git_log_tool = Tool(
     name="git_log",
-    description=(
-        "Show the recent commit history as one-line summaries (git log --oneline). "
-        "Read-only — does not modify the repository."
-    ),
+    description="Show recent commit history (one-line format).",
     parameters={
         "type": "object",
         "properties": {
@@ -163,17 +151,12 @@ git_log_tool = Tool(
 
 git_commit_tool = Tool(
     name="git_commit",
-    description=(
-        "Stage files and create a git commit. "
-        "Runs 'git add <files>' followed by 'git commit -m <message>'. "
-        "WARNING: this modifies the repository."
-    ),
+    description="Stage files and create a git commit.",
     parameters={
         "type": "object",
         "properties": {
             "message": {
                 "type": "string",
-                "description": "The commit message.",
             },
             "files": {
                 "type": "array",

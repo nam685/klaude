@@ -13,6 +13,7 @@ See docs/01-how-agentic-loops-work.md for the conceptual explanation.
 """
 
 import copy
+import os
 
 from openai import APIConnectionError, APITimeoutError, InternalServerError
 from rich.console import Console
@@ -63,6 +64,37 @@ from klaude.tools.worktree import tool as worktree_tool
 MAX_ITERATIONS = 50
 
 
+def _is_git_repo() -> bool:
+    """Check if the current directory is inside a git repository."""
+    path = os.getcwd()
+    while True:
+        if os.path.isdir(os.path.join(path, ".git")):
+            return True
+        parent = os.path.dirname(path)
+        if parent == path:
+            return False
+        path = parent
+
+
+def _select_tool_tiers(context_window: int) -> set[str]:
+    """Select which tool tiers to load based on environment and context budget.
+
+    Always loads core. Loads git if in a git repo. Loads extended only
+    if the context window is large enough (>16K) to afford the overhead.
+    """
+    tiers = {"core"}
+
+    if _is_git_repo():
+        tiers.add("git")
+
+    # Extended tools add ~1500 tokens of schema overhead.
+    # Only load them if we have enough room.
+    if context_window > 16384:
+        tiers.add("extended")
+
+    return tiers
+
+
 def create_registry() -> ToolRegistry:
     """Create a registry with all built-in tools."""
     registry = ToolRegistry()
@@ -102,7 +134,7 @@ class Session:
     def __init__(
         self,
         client: LLMClient | None = None,
-        context_window: int = 65536,
+        context_window: int = 0,
         console: Console | None = None,
         auto_approve: bool = False,
         max_tokens: int = 0,
@@ -118,7 +150,7 @@ class Session:
 
         # Load custom tool plugins from .klaude/tools/
         for plugin_tool in load_plugin_tools(self.config.tools_dir):
-            self.registry.register(plugin_tool)
+            self.registry.register(plugin_tool, is_plugin=True)
             self.console.print(f"[dim]Loaded plugin tool: {plugin_tool.name}[/dim]")
 
         # Connect to MCP servers (if configured)
@@ -127,15 +159,46 @@ class Session:
             self._mcp_bridge = MCPBridge()
             mcp_tools = self._mcp_bridge.connect_all(self.config.mcp_servers)
             for mcp_tool in mcp_tools:
-                self.registry.register(mcp_tool)
+                self.registry.register(mcp_tool, is_plugin=True)
                 self.console.print(f"[dim]MCP tool: {mcp_tool.name}[/dim]")
             if self._mcp_bridge.server_names:
                 self.console.print(
                     f"[dim]Connected to MCP servers: {', '.join(self._mcp_bridge.server_names)}[/dim]"
                 )
 
-        self.tool_schemas = self.registry.get_schemas()
-        self.tracker = ContextTracker(context_window=context_window)
+        # --- Context window resolution ---
+        # Priority: explicit arg > auto-detect from server > config file > default
+        effective_window = context_window
+        if effective_window == 0:
+            effective_window = self.config.context_window
+
+        detected = self.client.detect_context_window()
+        if detected:
+            # Server reports its actual capacity — use the smaller value
+            if detected < effective_window:
+                self.console.print(
+                    f"[dim]Server context: {detected:,} tokens "
+                    f"(config: {effective_window:,}, using server value)[/dim]"
+                )
+                effective_window = detected
+            else:
+                self.console.print(
+                    f"[dim]Server context: {detected:,} tokens[/dim]"
+                )
+
+        # --- Dynamic tool loading ---
+        self._tool_tiers = _select_tool_tiers(effective_window)
+        self.tool_schemas = self.registry.get_schemas(tiers=self._tool_tiers)
+
+        tier_names = ", ".join(sorted(self._tool_tiers))
+        schema_count = len(self.tool_schemas)
+        self.console.print(
+            f"[dim]Tools: {schema_count} loaded (tiers: {tier_names})[/dim]"
+        )
+
+        # --- Context tracker with optional exact tokenization ---
+        self.tracker = ContextTracker(context_window=effective_window)
+        self.tracker.set_client(self.client)
         self.tracker.set_tool_overhead(self.tool_schemas)
         self.history = MessageHistory(SYSTEM_PROMPT)
         self.permissions = PermissionManager(
@@ -286,7 +349,7 @@ class Session:
 def run(
     user_message: str,
     client: LLMClient | None = None,
-    context_window: int = 65536,
+    context_window: int = 0,
 ) -> str:
     """One-shot convenience function: create a session, run one turn, return."""
     session = Session(client=client, context_window=context_window)

@@ -3,7 +3,7 @@
 # Tools appear as mcp_<server>_<tool> in the tool list.
 
 [default]
-model = "qwen3-coder-next"
+model = "qwen3-coder-30b-a3b"
 base_url = "http://localhost:8080/v1"
 
 # GitHub — PR management, issues, code search
