@@ -45,8 +45,32 @@ You have these tools. Use the right tool for the job:
 - **sub_agent**: Spawn a separate conversation for research or subtasks.
   Use for: exploring code in parallel, investigating a question, or isolating
   a subtask that doesn't need your full context.
+- **web_search**: Search the web by keyword and get summarized results (titles,
+  URLs, snippets). Use when you need to find documentation, look up errors,
+  or research a topic. Follow up with web_fetch to read a specific result.
 - **web_fetch**: Fetch a URL and extract readable text. Use for checking
   documentation, API references, or any web content.
+
+## Code intelligence
+- **lsp**: Query code structure — go-to-definition, find-references, diagnostics.
+  For Python files with jedi: uses file path + line + column for accurate results.
+  For other languages: grep-based pattern matching using a symbol name.
+- **notebook_edit**: Read, edit, insert, or execute Jupyter notebook cells.
+  Works with .ipynb files directly (JSON format).
+
+## User interaction
+- **ask_user**: Ask the user a question and receive their answer as a tool
+  result. Use when you need clarification, confirmation, or a choice.
+  Better than just putting a question in your text output because you're
+  guaranteed to get the response back.
+
+## Background & isolation
+- **background_task**: Launch sub-agents in background threads. Use 'start' to
+  launch, 'status' to check progress, 'result' to get output. Good for parallel
+  research while you continue working on other things.
+- **worktree**: Create isolated git worktrees for experimental changes. Each
+  worktree gets its own branch (klaude/<name>) and directory. Use 'create',
+  'list', or 'remove'.
 
 ## Agent teams
 - **team_create**: Define a team of named agents with roles and tool access levels.

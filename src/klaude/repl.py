@@ -19,6 +19,8 @@ Slash commands:
     /context      — show current context usage
     /history      — show message history debug view
     /undo         — undo the last turn (Esc also works)
+    /plan         — toggle plan mode (read-only, no writes/bash)
+    /cron         — manage scheduled tasks (/cron 5m <prompt>, /cron list, /cron stop <id>)
     /skills       — list available skills
     /<name>       — run a skill (e.g., /commit, /review, /explain)
 """
@@ -67,13 +69,14 @@ def _save_readline() -> None:
         pass
 
 
-def _read_input(console: Console) -> str | None:
+def _read_input(console: Console, session: Session | None = None) -> str | None:
     """Read user input, handling EOF (Ctrl+D) and keyboard interrupt.
 
     Returns the input string, or None if the user wants to exit.
     """
     try:
-        line = input("klaude> ")
+        prompt = "klaude[plan]> " if session and session.permissions.plan_mode else "klaude> "
+        line = input(prompt)
         return line
     except EOFError:
         # Ctrl+D — exit
@@ -131,6 +134,39 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
             console.print("[yellow]Nothing to undo.[/yellow]")
         return True
 
+    if cmd == "/plan":
+        session.permissions.plan_mode = not session.permissions.plan_mode
+        state = "ON (read-only)" if session.permissions.plan_mode else "OFF (full access)"
+        color = "yellow" if session.permissions.plan_mode else "green"
+        console.print(f"[{color}]Plan mode: {state}[/{color}]")
+        return True
+
+    if cmd == "/cron":
+        from klaude.cron import create_job, list_jobs, stop_job, stop_all
+
+        if not cmd_args:
+            console.print(f"[dim]{list_jobs()}[/dim]")
+            return True
+        if cmd_args == "list":
+            console.print(f"[dim]{list_jobs()}[/dim]")
+            return True
+        if cmd_args.startswith("stop "):
+            job_id = cmd_args[5:].strip()
+            if job_id == "all":
+                console.print(f"[dim]{stop_all()}[/dim]")
+            else:
+                console.print(f"[dim]{stop_job(job_id)}[/dim]")
+            return True
+        # /cron <interval> <prompt>
+        cron_parts = cmd_args.split(None, 1)
+        if len(cron_parts) < 2:
+            console.print("[yellow]Usage: /cron <interval> <prompt>  (e.g., /cron 5m /review)[/yellow]")
+            return True
+        interval, prompt = cron_parts
+        msg = create_job(interval, prompt)
+        console.print(f"[dim]{msg}[/dim]")
+        return True
+
     if cmd == "/skills":
         from klaude.skills import format_skill_list
 
@@ -146,7 +182,7 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
 
     console.print(f"[red]Unknown command: {cmd}[/red]")
     console.print(
-        "[dim]Commands: /exit /quit /clear /context /history /undo /skills[/dim]"
+        "[dim]Commands: /exit /quit /clear /context /history /undo /plan /cron /skills[/dim]"
     )
     if session.skills:
         names = ", ".join(f"/{n}" for n in sorted(session.skills))
@@ -169,9 +205,22 @@ def repl(session: Session) -> None:
 
     _setup_readline()
 
+    # Set up cron callback so scheduled jobs can run turns
+    from klaude.cron import set_run_callback, stop_all as _cron_stop_all
+
+    def _cron_turn(prompt: str) -> None:
+        """Run a prompt through the session (called by cron timer thread)."""
+        try:
+            console.print(f"\n[dim italic]  (cron job running: {prompt[:60]})[/dim italic]")
+            session.turn(prompt)
+        except Exception:
+            pass  # don't crash the cron thread
+
+    set_run_callback(_cron_turn)
+
     try:
         while True:
-            line = _read_input(console)
+            line = _read_input(console, session)
 
             # None = exit signal (Ctrl+D)
             if line is None:
@@ -203,5 +252,6 @@ def repl(session: Session) -> None:
                 continue
 
     finally:
+        _cron_stop_all()  # stop all cron jobs on exit
         _save_readline()
         console.print("[dim]Goodbye.[/dim]")

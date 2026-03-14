@@ -76,3 +76,13 @@
 - [x] Usage guide for AI agents (system prompt patterns, tool calling tips) → `docs/AGENT-GUIDE.md` (Note 36)
 - [x] Example .klaude.toml configs (local, remote API, MCP servers) → `docs/examples/` (Note 36)
 - [x] Troubleshooting / FAQ → `docs/TROUBLESHOOTING.md` (Note 36)
+
+## Phase 10: Feature Parity with Claude Code
+- [x] Tool: `web_search` → `src/klaude/tools/web_search.py` — keyword search via DuckDuckGo HTML
+- [x] Tool: `ask_user` → `src/klaude/tools/ask_user.py` — structured question with answer as tool result
+- [x] Tool: `lsp` → `src/klaude/tools/lsp.py` — jedi (Python) + grep fallback (Note 39)
+- [x] Tool: `notebook_edit` → `src/klaude/tools/notebook_edit.py` — .ipynb JSON read/edit/insert/execute (Note 40)
+- [x] Background tasks → `src/klaude/tools/background_task.py` — threaded sub-agents with start/status/result (Note 41)
+- [x] Plan mode → `src/klaude/permissions.py` PLAN_MODE_BLOCKED, `src/klaude/repl.py` /plan command (Note 38)
+- [x] Git worktrees → `src/klaude/tools/worktree.py` — create/list/remove isolated worktrees (Note 42)
+- [x] Cron / scheduled tasks → `src/klaude/cron.py`, `src/klaude/repl.py` /cron command (Note 43)
