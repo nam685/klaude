@@ -15,12 +15,20 @@ means we need to be careful not to use too much context for the
 summarization request itself.
 """
 
-from klaude.client import LLMClient
-from klaude.context import ContextTracker
-from klaude.history import MessageHistory
+from klaude.core.client import LLMClient
+from klaude.core.context import ContextTracker
+from klaude.core.history import MessageHistory
 
-# Compact when context usage exceeds this fraction
-COMPACT_THRESHOLD = 0.75
+# Compact when context usage exceeds this fraction (adaptive by window size)
+COMPACT_THRESHOLD_SMALL = 0.60  # for context_window ≤ 16384
+COMPACT_THRESHOLD_NORMAL = 0.75  # for larger windows
+
+# Recent messages to keep (fewer for small windows)
+KEEP_RECENT_SMALL = 4
+KEEP_RECENT_NORMAL = 6
+
+# Window size boundary for adaptive behavior
+SMALL_WINDOW_THRESHOLD = 16384
 
 SUMMARIZE_PROMPT = """\
 Summarize the following conversation exchanges concisely. Focus on:
@@ -33,9 +41,24 @@ Be brief but preserve important details (file paths, function names, error messa
 Write in past tense as a factual record. Do not include greetings or filler."""
 
 
+def _get_threshold(context_window: int) -> float:
+    """Get compaction threshold based on context window size."""
+    if context_window <= SMALL_WINDOW_THRESHOLD:
+        return COMPACT_THRESHOLD_SMALL
+    return COMPACT_THRESHOLD_NORMAL
+
+
+def _get_keep_recent(context_window: int) -> int:
+    """Get number of recent messages to keep based on context window size."""
+    if context_window <= SMALL_WINDOW_THRESHOLD:
+        return KEEP_RECENT_SMALL
+    return KEEP_RECENT_NORMAL
+
+
 def should_compact(tracker: ContextTracker) -> bool:
     """Check if compaction is needed based on context usage."""
-    return tracker.usage_fraction >= COMPACT_THRESHOLD
+    threshold = _get_threshold(tracker.context_window)
+    return tracker.usage_fraction >= threshold
 
 
 def build_summary_messages(messages_to_summarize: list[dict]) -> list[dict]:
@@ -91,7 +114,8 @@ def compact(
     if not should_compact(tracker):
         return False
 
-    start, end = history.compactable_range()
+    keep_recent = _get_keep_recent(tracker.context_window)
+    start, end = history.compactable_range(keep_recent=keep_recent)
     if start >= end:
         return False
 

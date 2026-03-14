@@ -9,9 +9,9 @@ Config resolution order (highest priority wins):
 The config file supports model profiles:
 
     [default]
-    model = "qwen3-coder-next"
+    model = "qwen3-coder-30b-a3b"
     base_url = "http://localhost:8080/v1"
-    context_window = 65536
+    context_window = 32768
 
     [profiles.remote]
     model = "gpt-4o"
@@ -60,10 +60,10 @@ class MCPServerConfig:
 class KlaudeConfig:
     """Resolved configuration for a klaude session."""
     # LLM settings
-    model: str = "qwen3-coder-next"
+    model: str = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
     base_url: str = "http://localhost:8080/v1"
     api_key: str = "not-needed"
-    context_window: int = 65536
+    context_window: int = 32768
     max_tokens: int = 0
     auto_approve: bool = False
 

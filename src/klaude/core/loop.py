@@ -13,23 +13,25 @@ See docs/01-how-agentic-loops-work.md for the conceptual explanation.
 """
 
 import copy
+import os
 
 from openai import APIConnectionError, APITimeoutError, InternalServerError
 from rich.console import Console
 
-from klaude.client import LLMClient
-from klaude.compaction import compact
 from klaude.config import KlaudeConfig
-from klaude.context import ContextTracker
-from klaude.history import MessageHistory
-from klaude.hooks import run_hook
-from klaude.mcp import MCPBridge
+from klaude.core.client import LLMClient
+from klaude.core.compaction import compact
+from klaude.core.context import ContextTracker
+from klaude.core.history import MessageHistory
+from klaude.core.prompt import SYSTEM_PROMPT
+from klaude.core.stream import consume_stream
+from klaude.extensions.hooks import run_hook
+from klaude.extensions.mcp import MCPBridge
+from klaude.extensions.plugins import load_plugin_tools
+from klaude.extensions.skills import Skill, load_all_skills
 from klaude.permissions import PermissionManager
-from klaude.plugins import load_plugin_tools
-from klaude.prompt import SYSTEM_PROMPT
-from klaude.skills import Skill, load_all_skills
-from klaude.stream import consume_stream
 from klaude.tools.registry import ToolRegistry
+from klaude.ui.status_bar import StatusBar
 from klaude.tools.bash import tool as bash_tool
 from klaude.tools.edit_file import tool as edit_file_tool
 from klaude.tools.glob_search import tool as glob_tool
@@ -61,6 +63,37 @@ from klaude.tools.worktree import tool as worktree_tool
 
 # Maximum iterations per turn to prevent infinite loops (safety valve)
 MAX_ITERATIONS = 50
+
+
+def _is_git_repo() -> bool:
+    """Check if the current directory is inside a git repository."""
+    path = os.getcwd()
+    while True:
+        if os.path.isdir(os.path.join(path, ".git")):
+            return True
+        parent = os.path.dirname(path)
+        if parent == path:
+            return False
+        path = parent
+
+
+def _select_tool_tiers(context_window: int) -> set[str]:
+    """Select which tool tiers to load based on environment and context budget.
+
+    Always loads core. Loads git if in a git repo. Loads extended only
+    if the context window is large enough (>16K) to afford the overhead.
+    """
+    tiers = {"core"}
+
+    if _is_git_repo():
+        tiers.add("git")
+
+    # Extended tools add ~1500 tokens of schema overhead.
+    # Only load them if we have enough room.
+    if context_window > 16384:
+        tiers.add("extended")
+
+    return tiers
 
 
 def create_registry() -> ToolRegistry:
@@ -102,7 +135,7 @@ class Session:
     def __init__(
         self,
         client: LLMClient | None = None,
-        context_window: int = 65536,
+        context_window: int = 0,
         console: Console | None = None,
         auto_approve: bool = False,
         max_tokens: int = 0,
@@ -118,7 +151,7 @@ class Session:
 
         # Load custom tool plugins from .klaude/tools/
         for plugin_tool in load_plugin_tools(self.config.tools_dir):
-            self.registry.register(plugin_tool)
+            self.registry.register(plugin_tool, is_plugin=True)
             self.console.print(f"[dim]Loaded plugin tool: {plugin_tool.name}[/dim]")
 
         # Connect to MCP servers (if configured)
@@ -127,15 +160,46 @@ class Session:
             self._mcp_bridge = MCPBridge()
             mcp_tools = self._mcp_bridge.connect_all(self.config.mcp_servers)
             for mcp_tool in mcp_tools:
-                self.registry.register(mcp_tool)
+                self.registry.register(mcp_tool, is_plugin=True)
                 self.console.print(f"[dim]MCP tool: {mcp_tool.name}[/dim]")
             if self._mcp_bridge.server_names:
                 self.console.print(
                     f"[dim]Connected to MCP servers: {', '.join(self._mcp_bridge.server_names)}[/dim]"
                 )
 
-        self.tool_schemas = self.registry.get_schemas()
-        self.tracker = ContextTracker(context_window=context_window)
+        # --- Context window resolution ---
+        # Priority: explicit arg > auto-detect from server > config file > default
+        effective_window = context_window
+        if effective_window == 0:
+            effective_window = self.config.context_window
+
+        detected = self.client.detect_context_window()
+        if detected:
+            # Server reports its actual capacity — use the smaller value
+            if detected < effective_window:
+                self.console.print(
+                    f"[dim]Server context: {detected:,} tokens "
+                    f"(config: {effective_window:,}, using server value)[/dim]"
+                )
+                effective_window = detected
+            else:
+                self.console.print(
+                    f"[dim]Server context: {detected:,} tokens[/dim]"
+                )
+
+        # --- Dynamic tool loading ---
+        self._tool_tiers = _select_tool_tiers(effective_window)
+        self.tool_schemas = self.registry.get_schemas(tiers=self._tool_tiers)
+
+        tier_names = ", ".join(sorted(self._tool_tiers))
+        schema_count = len(self.tool_schemas)
+        self.console.print(
+            f"[dim]Tools: {schema_count} loaded (tiers: {tier_names})[/dim]"
+        )
+
+        # --- Context tracker with optional exact tokenization ---
+        self.tracker = ContextTracker(context_window=effective_window)
+        self.tracker.set_client(self.client)
         self.tracker.set_tool_overhead(self.tool_schemas)
         self.history = MessageHistory(SYSTEM_PROMPT)
         self.permissions = PermissionManager(
@@ -146,6 +210,9 @@ class Session:
 
         # Skills (reusable prompt templates)
         self.skills: dict[str, Skill] = load_all_skills(self.config.skills_dir)
+
+        # Persistent status bar (caller must .start()/.stop())
+        self.status_bar = StatusBar()
 
         # Undo snapshots: list of (turn_count, history_messages_copy)
         self._snapshots: list[tuple[int, list[dict]]] = []
@@ -172,6 +239,18 @@ class Session:
     def can_undo(self) -> bool:
         """Whether there's a snapshot to undo to."""
         return len(self._snapshots) > 0
+
+    def restore(self, saved_messages: list[dict], turn_count: int) -> None:
+        """Restore a previous session's conversation history.
+
+        The saved_messages should NOT include the system prompt (index 0) —
+        that's already set up by __init__.  This just appends the old
+        user/assistant/tool exchanges and resets the turn counter.
+        """
+        for msg in saved_messages:
+            self.history._messages.append(msg)
+        self.turn_count = turn_count
+        self.tracker.update(self.history.messages)
 
     def turn(self, user_message: str) -> str:
         """Process one user message through the agentic loop.
@@ -202,9 +281,8 @@ class Session:
                 )
                 return "Stopped: token budget exceeded."
 
-            status_style = "red" if self.tracker.is_warning else "dim"
-            self.console.print(
-                f"\n[{status_style}]{self.tracker.format_turn_summary(self.turn_count)}[/{status_style}]"
+            self.status_bar.update(
+                self.tracker.format_compact(self.turn_count)
             )
 
             # --- LLM call with error recovery ---
@@ -226,9 +304,10 @@ class Session:
             if not result.has_tool_calls:
                 self.history.add_assistant(result.to_message_dict())
                 self.tracker.update(self.history.messages)
-                self.console.print(
-                    f"\n[dim]{self.tracker.format_status()}[/dim]"
+                self.status_bar.update(
+                    self.tracker.format_compact(self.turn_count)
                 )
+                self.console.print()  # blank line after response
                 return result.content
 
             # --- Case 2: Tool calls → execute and continue ---
@@ -278,7 +357,9 @@ class Session:
 
         # Hit MAX_ITERATIONS
         self.tracker.update(self.history.messages)
-        self.console.print(f"\n[red]{self.tracker.format_status()}[/red]")
+        self.status_bar.update(
+            self.tracker.format_compact(self.turn_count)
+        )
         self.console.print("[red]Warning: hit maximum iterations, stopping.[/red]")
         return "Stopped: exceeded maximum iterations."
 
@@ -286,7 +367,7 @@ class Session:
 def run(
     user_message: str,
     client: LLMClient | None = None,
-    context_window: int = 65536,
+    context_window: int = 0,
 ) -> str:
     """One-shot convenience function: create a session, run one turn, return."""
     session = Session(client=client, context_window=context_window)

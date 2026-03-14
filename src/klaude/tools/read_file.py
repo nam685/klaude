@@ -20,13 +20,12 @@ def handle_read_file(path: str) -> str:
 
 tool = Tool(
     name="read_file",
-    description="Read the contents of a file at the given path. Returns the full file contents as text.",
+    description="Read file contents at the given path.",
     parameters={
         "type": "object",
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Absolute path to the file to read",
             }
         },
         "required": ["path"],

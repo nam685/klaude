@@ -18,17 +18,15 @@ def handle_write_file(path: str, content: str) -> str:
 
 tool = Tool(
     name="write_file",
-    description="Write content to a file at the given path. Creates the file if it doesn't exist, overwrites if it does. Creates parent directories as needed.",
+    description="Write content to a file. Creates parent dirs as needed.",
     parameters={
         "type": "object",
         "properties": {
             "path": {
                 "type": "string",
-                "description": "Absolute path to the file to write",
             },
             "content": {
                 "type": "string",
-                "description": "The content to write to the file",
             },
         },
         "required": ["path", "content"],

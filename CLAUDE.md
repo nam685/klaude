@@ -8,6 +8,11 @@
 
 ## Project Structure
 - `src/klaude/` — main package
+  - `core/` — loop, client, context, compaction, history, stream, prompt
+  - `ui/` — cli, repl, render
+  - `extensions/` — plugins, mcp, skills, hooks, team, cron
+  - `tools/` — 18 tool files + registry
+  - Top-level: config, permissions, memory
 - `docs/` — study materials and implementation notes
 - `scripts/` — helper scripts (model setup, etc.)
 

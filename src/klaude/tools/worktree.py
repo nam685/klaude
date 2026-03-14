@@ -144,14 +144,7 @@ def handle_worktree(
 
 tool = Tool(
     name="worktree",
-    description=(
-        "Manage git worktrees for isolated agent work. A worktree is a separate "
-        "working directory on its own branch, sharing the same git repository. "
-        "Actions: 'create' (new worktree on a klaude/<name> branch), "
-        "'list' (show all worktrees), 'remove' (clean up a worktree and its branch). "
-        "Use for: isolating experimental changes, parallel work on different features, "
-        "or letting agents work without affecting the main directory."
-    ),
+    description="Manage git worktrees. Actions: create, list, remove.",
     parameters={
         "type": "object",
         "properties": {

@@ -127,7 +127,7 @@ The system prompt (`src/klaude/prompt.py`) tells the model:
 
 klaude tracks token usage and compacts history when it gets too large:
 
-- **Context window**: configurable (default 65536 tokens)
+- **Context window**: configurable (default 32768 tokens)
 - **Warning threshold**: 80% of context window
 - **Compaction**: when history exceeds threshold, older messages are summarized by the LLM into a compact form
 - **Token counting**: estimated from message character count (rough but fast)
@@ -135,7 +135,7 @@ klaude tracks token usage and compacts history when it gets too large:
 The model sees a status line each iteration:
 
 ```
-Turn 3 | ~12,450 tokens (~19% of 65,536)
+Turn 3 | ~12,450 tokens (~19% of 32,768)
 ```
 
 ## Streaming
@@ -153,7 +153,7 @@ For best results, the model should support:
 3. **Following complex instructions** — the system prompt is ~2K tokens with detailed guidance
 4. **JSON argument generation** — tool arguments must be valid JSON strings
 
-Tested with Qwen3-Coder-Next. Should work with any model that has good tool-calling support via an OpenAI-compatible API.
+Tested with Qwen3-Coder-30B-A3B. Should work with any model that has good tool-calling support via an OpenAI-compatible API.
 
 ## Extending with custom tools
 

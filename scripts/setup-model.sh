@@ -1,31 +1,25 @@
 #!/usr/bin/env bash
-# setup-model.sh — Install llama.cpp and download Qwen3-Coder-Next
+# setup-model.sh — Set up MLX model server for klaude
 #
 # Usage:
-#   ./scripts/setup-model.sh           # install + download Q3_K_M (recommended for 48GB)
-#   ./scripts/setup-model.sh Q4_K_M    # download a different quantization
-#   ./scripts/setup-model.sh --serve   # start the server (after downloading)
+#   ./scripts/setup-model.sh           # install mlx-lm + download model
+#   ./scripts/setup-model.sh --serve   # start the MLX server
 #
 # What this does:
-#   1. Installs llama.cpp via Homebrew (if not installed)
-#   2. Downloads the GGUF model from HuggingFace
-#   3. Optionally starts llama-server
+#   1. Installs mlx-lm via uv (if not installed)
+#   2. Downloads the MLX model from HuggingFace
+#   3. Optionally starts mlx_lm.server
 
 set -euo pipefail
 
 # --- Configuration ---
-QUANT="${1:-Q3_K_M}"
-MODEL_REPO="unsloth/Qwen3-Coder-Next-GGUF"
-MODEL_DIR="$HOME/models"
-CONTEXT_SIZE=8192     # 8K tokens — safe for 48GB Mac with Q3_K_M (36GB model)
+MLX_MODEL="mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
 PORT=8080
-GPU_LAYERS=99         # offload everything to GPU (Apple Silicon unified memory)
 
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[0;33m'
-DIM='\033[0;2m'
 NC='\033[0m' # No Color
 
 info()  { echo -e "${GREEN}[+]${NC} $*"; }
@@ -34,131 +28,50 @@ error() { echo -e "${RED}[x]${NC} $*"; exit 1; }
 
 # --- Serve mode ---
 if [[ "${1:-}" == "--serve" ]]; then
-    QUANT="${2:-Q3_K_M}"
-    # Search common cache locations: macOS Library/Caches, Linux ~/.cache, and MODEL_DIR
-    # Build list of directories that actually exist (find fails on missing dirs,
-    # and set -e + pipefail would silently kill the script)
-    SEARCH_DIRS=()
-    for d in "$MODEL_DIR" "$HOME/Library/Caches/llama.cpp" "$HOME/.cache/llama.cpp"; do
-        [[ -d "$d" ]] && SEARCH_DIRS+=("$d")
-    done
-    MODEL_FILE=$(find "${SEARCH_DIRS[@]}" \
-        -name "*Qwen3-Coder-Next*${QUANT}*.gguf" ! -name "*.downloadInProgress" -type f 2>/dev/null | head -1 || true)
-    if [[ -z "$MODEL_FILE" ]]; then
-        error "No model file found for quant $QUANT. Run setup first."
+    if ! command -v mlx_lm.server &>/dev/null; then
+        error "mlx_lm not found. Run: ./scripts/setup-model.sh"
     fi
-    info "Starting llama-server..."
-    info "  Model: $MODEL_FILE"
+    info "Starting mlx_lm.server..."
+    info "  Model: $MLX_MODEL"
     info "  Port:  $PORT"
-    info "  Context: $CONTEXT_SIZE tokens"
-    info "  GPU layers: $GPU_LAYERS"
     echo ""
     info "API will be available at: http://localhost:${PORT}/v1"
     info "Press Ctrl+C to stop"
     echo ""
-    exec llama-server \
-        -m "$MODEL_FILE" \
-        --port "$PORT" \
-        -c "$CONTEXT_SIZE" \
-        -ngl "$GPU_LAYERS"
+    exec mlx_lm.server \
+        --model "$MLX_MODEL" \
+        --port "$PORT"
 fi
 
-# --- Step 1: Install llama.cpp ---
-info "Step 1: Checking llama.cpp installation..."
+# --- Step 1: Install mlx-lm ---
+info "Step 1: Checking mlx-lm installation..."
 
-if command -v llama-server &>/dev/null; then
-    info "llama-server already installed: $(which llama-server)"
-    llama-server --version 2>&1 | head -1 || true
+if command -v mlx_lm.server &>/dev/null; then
+    info "mlx-lm already installed"
 else
-    if ! command -v brew &>/dev/null; then
-        error "Homebrew not found. Install from https://brew.sh"
+    if ! command -v uv &>/dev/null; then
+        error "uv not found. Install from https://docs.astral.sh/uv/"
     fi
-    info "Installing llama.cpp via Homebrew..."
-    brew install llama.cpp
-    info "Installed: $(which llama-server)"
+    info "Installing mlx-lm via uv..."
+    uv tool install mlx-lm
+    info "Installed mlx_lm.server"
 fi
 
 echo ""
 
 # --- Step 2: Download model ---
-info "Step 2: Downloading Qwen3-Coder-Next (${QUANT})..."
-info "  Repository: $MODEL_REPO"
-info "  Destination: $MODEL_DIR"
+info "Step 2: Downloading ${MLX_MODEL}..."
 
-mkdir -p "$MODEL_DIR"
-
-# Use llama.cpp's built-in HuggingFace download
-# This caches to ~/.cache/llama.cpp/ and is resumable
-info "Downloading... (Q3_K_M is ~35.7GB — this will take a while)"
-echo ""
-
-# Check if we can use llama-cli for downloading, otherwise use huggingface-cli
-if command -v llama-cli &>/dev/null; then
-    # llama-cli can download directly with -hf flag
-    # Just do a test run to trigger the download
-    CACHE_DIR="$HOME/Library/Caches/llama.cpp"
-    [[ ! -d "$CACHE_DIR" ]] && CACHE_DIR="$HOME/.cache/llama.cpp"
-    info "Using llama-cli to download from HuggingFace..."
-    info "Cache: $CACHE_DIR"
-    echo ""
-
-    # Monitor download progress in the background
-    EXPECTED_SIZE=38322487328  # bytes, from manifest
-    PARTIAL_FILE=$(find "$CACHE_DIR" -name "*${QUANT}*.downloadInProgress" -type f 2>/dev/null | head -1)
-
-    # Start llama-cli (it handles the actual download + resume)
-    # Run in background so we can show progress
-    llama-cli -hf "${MODEL_REPO}:${QUANT}" -p "test" -n 1 2>/dev/null &
-    LLAMA_PID=$!
-
-    # Show progress while download is in progress
-    while kill -0 "$LLAMA_PID" 2>/dev/null; do
-        # Find the partial or complete file
-        DL_FILE=$(find "$CACHE_DIR" -name "*${QUANT}*" -type f 2>/dev/null | head -1)
-        if [[ -n "$DL_FILE" ]]; then
-            CURRENT_SIZE=$(stat -f%z "$DL_FILE" 2>/dev/null || echo 0)
-            PCT=$((CURRENT_SIZE * 100 / EXPECTED_SIZE))
-            CURRENT_GB=$(echo "scale=1; $CURRENT_SIZE / 1073741824" | bc)
-            TOTAL_GB=$(echo "scale=1; $EXPECTED_SIZE / 1073741824" | bc)
-            printf "\r  Progress: %s GB / %s GB  (%d%%)" "$CURRENT_GB" "$TOTAL_GB" "$PCT"
-        fi
-        sleep 2
-    done
-    echo ""
-
-    wait "$LLAMA_PID" || true
-
-    # Find the cached file (macOS uses ~/Library/Caches, Linux uses ~/.cache)
-    CACHE_SEARCH=()
-    for d in "$HOME/Library/Caches/llama.cpp" "$HOME/.cache/llama.cpp"; do
-        [[ -d "$d" ]] && CACHE_SEARCH+=("$d")
-    done
-    MODEL_FILE=$(find "${CACHE_SEARCH[@]}" \
-        -name "*${QUANT}*.gguf" ! -name "*.downloadInProgress" -type f 2>/dev/null | head -1 || true)
+# mlx_lm auto-downloads on first use, but pre-downloading avoids
+# a long wait on first `--serve`. Try hf CLI, fall back to mlx_lm.generate.
+if command -v hf &>/dev/null; then
+    hf download "$MLX_MODEL"
 elif command -v huggingface-cli &>/dev/null; then
-    info "Using huggingface-cli to download..."
-    huggingface-cli download "$MODEL_REPO" \
-        --include "*${QUANT}*" \
-        --local-dir "$MODEL_DIR"
-    MODEL_FILE=$(find "$MODEL_DIR" -name "*${QUANT}*" -type f 2>/dev/null | head -1)
+    huggingface-cli download "$MLX_MODEL"
 else
-    warn "No download tool found. Installing huggingface-hub..."
+    info "Installing huggingface-hub for download..."
     uv tool install huggingface-hub
-    huggingface-cli download "$MODEL_REPO" \
-        --include "*${QUANT}*" \
-        --local-dir "$MODEL_DIR"
-    MODEL_FILE=$(find "$MODEL_DIR" -name "*${QUANT}*" -type f 2>/dev/null | head -1)
-fi
-
-echo ""
-
-if [[ -n "${MODEL_FILE:-}" ]]; then
-    info "Model downloaded: $MODEL_FILE"
-    SIZE=$(du -h "$MODEL_FILE" | cut -f1)
-    info "Size: $SIZE"
-else
-    warn "Could not locate the downloaded model file."
-    warn "Check ~/.cache/llama.cpp/ or $MODEL_DIR"
+    hf download "$MLX_MODEL"
 fi
 
 echo ""
@@ -168,7 +81,7 @@ info "To start the server:"
 echo "  ./scripts/setup-model.sh --serve"
 echo ""
 info "Or manually:"
-echo "  llama-server -hf ${MODEL_REPO}:${QUANT} --port ${PORT} -c ${CONTEXT_SIZE} -ngl ${GPU_LAYERS}"
+echo "  mlx_lm.server --model $MLX_MODEL --port $PORT"
 echo ""
 info "Then run klaude:"
 echo "  uv run klaude \"your task here\""

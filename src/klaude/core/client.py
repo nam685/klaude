@@ -19,7 +19,7 @@ from openai.types.chat import (
 
 # Default to local llama-server
 DEFAULT_BASE_URL = "http://localhost:8080/v1"
-DEFAULT_MODEL = "qwen3-coder-next"
+DEFAULT_MODEL = "qwen3-coder-30b-a3b"
 
 # Retry config
 MAX_RETRIES = 3
@@ -37,6 +37,7 @@ class LLMClient:
         api_key: str = "not-needed",
     ):
         self.model = model
+        self.base_url = base_url
         # Explicit httpx client that bypasses proxy env vars (ALL_PROXY, etc.).
         # Without this, httpx tries to route localhost through a SOCKS proxy.
         transport = httpx.HTTPTransport()
@@ -80,6 +81,55 @@ class LLMClient:
             kwargs["tools"] = tools
 
         return self._retry(lambda: self.client.chat.completions.create(**kwargs))
+
+    def detect_context_window(self) -> int | None:
+        """Query llama-server for the actual context window size.
+
+        Tries /props first (llama-server native), falls back to None.
+        Returns the context size in tokens, or None if detection fails.
+        """
+        # Strip /v1 suffix to get the base server URL
+        server_url = self.base_url.rstrip("/")
+        if server_url.endswith("/v1"):
+            server_url = server_url[:-3]
+
+        try:
+            transport = httpx.HTTPTransport()
+            with httpx.Client(transport=transport, timeout=5.0) as client:
+                resp = client.get(f"{server_url}/props")
+                if resp.status_code == 200:
+                    data = resp.json()
+                    n_ctx = data.get("default_generation_settings", {}).get("n_ctx")
+                    if n_ctx and isinstance(n_ctx, int) and n_ctx > 0:
+                        return n_ctx
+        except Exception:
+            pass
+        return None
+
+    def tokenize(self, text: str) -> list[int] | None:
+        """Get exact token IDs using llama-server's /tokenize endpoint.
+
+        Returns list of token IDs, or None if endpoint unavailable.
+        """
+        server_url = self.base_url.rstrip("/")
+        if server_url.endswith("/v1"):
+            server_url = server_url[:-3]
+
+        try:
+            transport = httpx.HTTPTransport()
+            with httpx.Client(transport=transport, timeout=5.0) as client:
+                resp = client.post(
+                    f"{server_url}/tokenize",
+                    json={"content": text},
+                )
+                if resp.status_code == 200:
+                    data = resp.json()
+                    tokens = data.get("tokens")
+                    if isinstance(tokens, list):
+                        return tokens
+        except Exception:
+            pass
+        return None
 
     def _retry[T](self, fn: Callable[[], T]) -> T:
         """Execute fn with exponential backoff on transient errors."""

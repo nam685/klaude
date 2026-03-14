@@ -32,13 +32,12 @@ def handle_bash(command: str) -> str:
 
 tool = Tool(
     name="bash",
-    description="Execute a bash command and return its stdout and stderr. Commands time out after 30 seconds.",
+    description="Execute a bash command. Times out after 30 seconds.",
     parameters={
         "type": "object",
         "properties": {
             "command": {
                 "type": "string",
-                "description": "The bash command to execute",
             }
         },
         "required": ["command"],

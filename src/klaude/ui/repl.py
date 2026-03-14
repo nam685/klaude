@@ -22,6 +22,7 @@ Slash commands:
     /plan         — toggle plan mode (read-only, no writes/bash)
     /cron         — manage scheduled tasks (/cron 5m <prompt>, /cron list, /cron stop <id>)
     /skills       — list available skills
+    /sessions     — list saved sessions (resume with klaude -c or --resume <id>)
     /<name>       — run a skill (e.g., /commit, /review, /explain)
 """
 
@@ -32,7 +33,7 @@ from pathlib import Path
 from rich.console import Console
 from rich.panel import Panel
 
-from klaude.loop import Session
+from klaude.core.loop import Session
 
 # History file for readline (up-arrow recall across sessions)
 HISTORY_FILE = Path.home() / ".klaude_history"
@@ -105,8 +106,8 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
         return False
 
     if cmd == "/clear":
-        from klaude.prompt import SYSTEM_PROMPT
-        from klaude.history import MessageHistory
+        from klaude.core.prompt import SYSTEM_PROMPT
+        from klaude.core.history import MessageHistory
 
         session.history = MessageHistory(SYSTEM_PROMPT)
         session.turn_count = 0
@@ -142,7 +143,7 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
         return True
 
     if cmd == "/cron":
-        from klaude.cron import create_job, list_jobs, stop_job, stop_all
+        from klaude.extensions.cron import create_job, list_jobs, stop_job, stop_all
 
         if not cmd_args:
             console.print(f"[dim]{list_jobs()}[/dim]")
@@ -168,9 +169,15 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
         return True
 
     if cmd == "/skills":
-        from klaude.skills import format_skill_list
+        from klaude.extensions.skills import format_skill_list
 
         console.print(f"[dim]{format_skill_list(session.skills)}[/dim]")
+        return True
+
+    if cmd == "/sessions":
+        from klaude.core.session_store import list_sessions, format_session_list
+
+        console.print(f"[dim]{format_session_list(list_sessions())}[/dim]")
         return True
 
     # Check if it's a skill name (e.g., /commit, /review)
@@ -182,7 +189,7 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
 
     console.print(f"[red]Unknown command: {cmd}[/red]")
     console.print(
-        "[dim]Commands: /exit /quit /clear /context /history /undo /plan /cron /skills[/dim]"
+        "[dim]Commands: /exit /quit /clear /context /history /undo /plan /cron /skills /sessions[/dim]"
     )
     if session.skills:
         names = ", ".join(f"/{n}" for n in sorted(session.skills))
@@ -204,9 +211,10 @@ def repl(session: Session) -> None:
     )
 
     _setup_readline()
+    session.status_bar.start()
 
     # Set up cron callback so scheduled jobs can run turns
-    from klaude.cron import set_run_callback, stop_all as _cron_stop_all
+    from klaude.extensions.cron import set_run_callback, stop_all as _cron_stop_all
 
     def _cron_turn(prompt: str) -> None:
         """Run a prompt through the session (called by cron timer thread)."""
@@ -252,6 +260,7 @@ def repl(session: Session) -> None:
                 continue
 
     finally:
+        session.status_bar.stop()
         _cron_stop_all()  # stop all cron jobs on exit
         _save_readline()
         console.print("[dim]Goodbye.[/dim]")

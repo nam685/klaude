@@ -12,8 +12,8 @@ The LLM client is shared via set_client(), called by Session.__init__.
 See Note 35 in docs/07-implementation-notes.md.
 """
 
-from klaude.client import LLMClient
-from klaude.team import AgentRole, MessageBoard, run_agent
+from klaude.core.client import LLMClient
+from klaude.extensions.team import AgentRole, MessageBoard, run_agent
 from klaude.tools.registry import Tool
 
 # Module-level state — shared across tool calls within a session
@@ -80,18 +80,12 @@ def handle_team_create(
 
 team_create_tool = Tool(
     name="team_create",
-    description=(
-        "Create a team of named agents with specific roles and tool access levels. "
-        "Each member has a name, description, optional system_prompt, and tool_access "
-        "(readonly, readwrite, or full). Use this before team_delegate to define who "
-        "will work on what. Creating a new team replaces any existing one."
-    ),
+    description="Define a team of agents with roles and tool access levels.",
     parameters={
         "type": "object",
         "properties": {
             "team_name": {
                 "type": "string",
-                "description": "A name for the team (e.g., 'test-suite', 'refactor-team').",
             },
             "members": {
                 "type": "array",
@@ -100,28 +94,25 @@ team_create_tool = Tool(
                     "properties": {
                         "name": {
                             "type": "string",
-                            "description": "The member's name/role (e.g., 'researcher', 'coder', 'reviewer').",
                         },
                         "description": {
                             "type": "string",
-                            "description": "What this member does (e.g., 'Explores codebase structure').",
                         },
                         "system_prompt": {
                             "type": "string",
-                            "description": "Optional extra instructions for this member's system prompt.",
                         },
                         "tool_access": {
                             "type": "string",
                             "enum": ["readonly", "readwrite", "full"],
                             "description": (
-                                "Tool access level. readonly: search/read files. "
-                                "readwrite: + write/edit files. full: + bash/git/web."
+                                "readonly: read files. "
+                                "readwrite: + write/edit. full: + bash/git/web."
                             ),
                         },
                     },
                     "required": ["name", "description"],
                 },
-                "description": "List of team members to create.",
+                "description": "List of team members. Each needs name and description.",
             },
         },
         "required": ["team_name", "members"],
@@ -163,32 +154,20 @@ def handle_team_delegate(
 
 team_delegate_tool = Tool(
     name="team_delegate",
-    description=(
-        "Delegate a task to a specific team member. The member runs as an isolated "
-        "agent conversation with tools matching their access level. They can see "
-        "messages from the team's message board (previous members' results). "
-        "Returns the member's findings when done. Use after team_create."
-    ),
+    description="Assign a task to a team member and get their results.",
     parameters={
         "type": "object",
         "properties": {
             "member_name": {
                 "type": "string",
-                "description": "Name of the team member to delegate to (must match a name from team_create).",
+                "description": "Must match a name from team_create.",
             },
             "task": {
                 "type": "string",
-                "description": (
-                    "A clear description of what the member should do. Be specific — "
-                    "include file paths, function names, or patterns to look for."
-                ),
             },
             "include_messages": {
                 "type": "boolean",
-                "description": (
-                    "Whether to include the team message board in the member's context. "
-                    "Default true — set to false if the task is independent."
-                ),
+                "description": "Include the team message board in context (default true).",
             },
         },
         "required": ["member_name", "task"],
@@ -223,31 +202,25 @@ def handle_team_message(
 
 team_message_tool = Tool(
     name="team_message",
-    description=(
-        "Read or post messages on the team's shared message board. "
-        "Use action='read' to see all messages (including results from delegated tasks). "
-        "Use action='post' to add context or instructions for team members. "
-        "Delegated tasks automatically post their results to the board."
-    ),
+    description="Read or post on the team's shared message board.",
     parameters={
         "type": "object",
         "properties": {
             "action": {
                 "type": "string",
                 "enum": ["read", "post"],
-                "description": "Whether to read the board or post a new message.",
             },
             "content": {
                 "type": "string",
-                "description": "The message content (required for action 'post').",
+                "description": "Message content (required for 'post').",
             },
             "from_name": {
                 "type": "string",
-                "description": "Who the message is from (default: 'lead').",
+                "description": "Sender name (default: 'lead').",
             },
             "to_name": {
                 "type": "string",
-                "description": "Optional recipient name. Omit for broadcast to all members.",
+                "description": "Recipient name. Omit for broadcast.",
             },
         },
         "required": ["action"],

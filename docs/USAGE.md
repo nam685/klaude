@@ -123,7 +123,7 @@ klaude loads `.klaude.toml` from the project root (or any parent directory).
 
 ```toml
 [default]
-model = "qwen3-coder-next"
+model = "qwen3-coder-30b-a3b"
 base_url = "http://localhost:8080/v1"
 ```
 
@@ -131,10 +131,10 @@ base_url = "http://localhost:8080/v1"
 
 ```toml
 [default]
-model = "qwen3-coder-next"
+model = "qwen3-coder-30b-a3b"
 base_url = "http://localhost:8080/v1"
 api_key = "not-needed"              # or api_key_env = "OPENAI_API_KEY"
-context_window = 65536
+context_window = 32768
 max_tokens = 0                      # 0 = unlimited
 auto_approve = false
 undo_depth = 10

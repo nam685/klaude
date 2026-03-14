@@ -80,19 +80,12 @@ def handle_web_fetch(url: str) -> str:
 
 tool = Tool(
     name="web_fetch",
-    description=(
-        "Fetch a URL and return its text content. "
-        "HTML pages are converted to readable text (tags stripped, entities decoded). "
-        "Use for: checking documentation, reading API references, fetching READMEs, "
-        "or any publicly accessible web page. "
-        "Does NOT search the web — you need a specific URL."
-    ),
+    description="Fetch a URL and return readable text content.",
     parameters={
         "type": "object",
         "properties": {
             "url": {
                 "type": "string",
-                "description": "The URL to fetch (must start with http:// or https://).",
             }
         },
         "required": ["url"],
