@@ -21,6 +21,10 @@ from openai.types.chat import (
 DEFAULT_BASE_URL = "http://localhost:8080/v1"
 DEFAULT_MODEL = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-4bit"
 
+# mlx-lm server defaults to --max-tokens 512 which truncates responses.
+# Override per-request so the model can generate full responses.
+DEFAULT_MAX_COMPLETION_TOKENS = 8192
+
 # Retry config
 MAX_RETRIES = 3
 RETRY_BASE_DELAY = 1.0  # seconds — doubles each retry (1s, 2s, 4s)
@@ -56,6 +60,7 @@ class LLMClient:
         kwargs: dict = {
             "model": self.model,
             "messages": messages,
+            "max_tokens": DEFAULT_MAX_COMPLETION_TOKENS,
         }
         if tools:
             kwargs["tools"] = tools
@@ -75,6 +80,7 @@ class LLMClient:
         kwargs: dict = {
             "model": self.model,
             "messages": messages,
+            "max_tokens": DEFAULT_MAX_COMPLETION_TOKENS,
             "stream": True,
         }
         if tools:
