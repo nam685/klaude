@@ -1,0 +1,8 @@
+# Remote OpenAI API
+# Set OPENAI_API_KEY in your environment before running klaude.
+
+[default]
+model = "gpt-4o"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+context_window = 128000

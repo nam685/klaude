@@ -1,0 +1,24 @@
+# MCP server integration
+# Each server runs as a subprocess, communicating via stdio.
+# Tools appear as mcp_<server>_<tool> in the tool list.
+
+[default]
+model = "qwen3-coder-next"
+base_url = "http://localhost:8080/v1"
+
+# GitHub — PR management, issues, code search
+[mcp.servers.github]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-github"]
+env = { GITHUB_TOKEN = "env:GITHUB_TOKEN" }
+
+# Filesystem — read/write files outside the working directory
+[mcp.servers.filesystem]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-filesystem", "/path/to/allowed/dir"]
+
+# PostgreSQL — query your database
+[mcp.servers.postgres]
+command = "npx"
+args = ["-y", "@modelcontextprotocol/server-postgres"]
+env = { DATABASE_URL = "env:DATABASE_URL" }

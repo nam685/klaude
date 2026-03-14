@@ -1,0 +1,7 @@
+# Local llama-server — the default setup
+# Copy this to your project root as .klaude.toml
+
+[default]
+model = "qwen3-coder-next"
+base_url = "http://localhost:8080/v1"
+context_window = 65536

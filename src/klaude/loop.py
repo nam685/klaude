@@ -1,0 +1,288 @@
+"""The agentic loop — the heart of klaude.
+
+This implements the core pattern:
+    while LLM returns tool_calls:
+        execute each tool
+        feed results back to LLM
+    print final text response (streamed token-by-token)
+
+The Session class holds persistent state across turns (for multi-turn REPL).
+Each call to session.turn() processes one user message through the full loop.
+
+See docs/01-how-agentic-loops-work.md for the conceptual explanation.
+"""
+
+import copy
+
+from openai import APIConnectionError, APITimeoutError, InternalServerError
+from rich.console import Console
+
+from klaude.client import LLMClient
+from klaude.compaction import compact
+from klaude.config import KlaudeConfig
+from klaude.context import ContextTracker
+from klaude.history import MessageHistory
+from klaude.hooks import run_hook
+from klaude.mcp import MCPBridge
+from klaude.permissions import PermissionManager
+from klaude.plugins import load_plugin_tools
+from klaude.prompt import SYSTEM_PROMPT
+from klaude.skills import Skill, load_all_skills
+from klaude.stream import consume_stream
+from klaude.tools.registry import ToolRegistry
+from klaude.tools.bash import tool as bash_tool
+from klaude.tools.edit_file import tool as edit_file_tool
+from klaude.tools.glob_search import tool as glob_tool
+from klaude.tools.grep_search import tool as grep_tool
+from klaude.tools.list_directory import tool as list_directory_tool
+from klaude.tools.read_file import tool as read_file_tool
+from klaude.tools.write_file import tool as write_file_tool
+from klaude.tools.git import (
+    git_status_tool,
+    git_diff_tool,
+    git_log_tool,
+    git_commit_tool,
+)
+from klaude.tools.task_list import tool as task_list_tool
+from klaude.tools.sub_agent import tool as sub_agent_tool, set_client as set_sub_agent_client
+from klaude.tools.team import (
+    team_create_tool,
+    team_delegate_tool,
+    team_message_tool,
+    set_client as set_team_client,
+)
+from klaude.tools.web_fetch import tool as web_fetch_tool
+
+# Maximum iterations per turn to prevent infinite loops (safety valve)
+MAX_ITERATIONS = 50
+
+
+def create_registry() -> ToolRegistry:
+    """Create a registry with all built-in tools."""
+    registry = ToolRegistry()
+    registry.register(read_file_tool)
+    registry.register(write_file_tool)
+    registry.register(edit_file_tool)
+    registry.register(bash_tool)
+    registry.register(glob_tool)
+    registry.register(grep_tool)
+    registry.register(list_directory_tool)
+    registry.register(git_status_tool)
+    registry.register(git_diff_tool)
+    registry.register(git_log_tool)
+    registry.register(git_commit_tool)
+    registry.register(task_list_tool)
+    registry.register(sub_agent_tool)
+    registry.register(web_fetch_tool)
+    registry.register(team_create_tool)
+    registry.register(team_delegate_tool)
+    registry.register(team_message_tool)
+    return registry
+
+
+class Session:
+    """A conversation session — persists state across multiple turns.
+
+    In one-shot mode: one session, one turn.
+    In REPL mode: one session, many turns (history accumulates).
+    """
+
+    def __init__(
+        self,
+        client: LLMClient | None = None,
+        context_window: int = 65536,
+        console: Console | None = None,
+        auto_approve: bool = False,
+        max_tokens: int = 0,
+        config: KlaudeConfig | None = None,
+    ) -> None:
+        self.config = config or KlaudeConfig()
+        self.client = client or LLMClient()
+        self.console = console or Console()
+        set_sub_agent_client(self.client)  # share client with sub-agents
+        set_team_client(self.client)  # share client with team agents
+        self.registry = create_registry()
+
+        # Load custom tool plugins from .klaude/tools/
+        for plugin_tool in load_plugin_tools(self.config.tools_dir):
+            self.registry.register(plugin_tool)
+            self.console.print(f"[dim]Loaded plugin tool: {plugin_tool.name}[/dim]")
+
+        # Connect to MCP servers (if configured)
+        self._mcp_bridge: MCPBridge | None = None
+        if self.config.mcp_servers:
+            self._mcp_bridge = MCPBridge()
+            mcp_tools = self._mcp_bridge.connect_all(self.config.mcp_servers)
+            for mcp_tool in mcp_tools:
+                self.registry.register(mcp_tool)
+                self.console.print(f"[dim]MCP tool: {mcp_tool.name}[/dim]")
+            if self._mcp_bridge.server_names:
+                self.console.print(
+                    f"[dim]Connected to MCP servers: {', '.join(self._mcp_bridge.server_names)}[/dim]"
+                )
+
+        self.tool_schemas = self.registry.get_schemas()
+        self.tracker = ContextTracker(context_window=context_window)
+        self.tracker.set_tool_overhead(self.tool_schemas)
+        self.history = MessageHistory(SYSTEM_PROMPT)
+        self.permissions = PermissionManager(
+            console=self.console, auto_approve=auto_approve
+        )
+        self.max_tokens = max_tokens
+        self.turn_count = 0
+
+        # Skills (reusable prompt templates)
+        self.skills: dict[str, Skill] = load_all_skills(self.config.skills_dir)
+
+        # Undo snapshots: list of (turn_count, history_messages_copy)
+        self._snapshots: list[tuple[int, list[dict]]] = []
+        self._undo_depth = self.config.undo_depth
+
+    def snapshot(self) -> None:
+        """Save a snapshot of the current state for undo."""
+        snap = (self.turn_count, copy.deepcopy(self.history.messages))
+        self._snapshots.append(snap)
+        if len(self._snapshots) > self._undo_depth:
+            self._snapshots.pop(0)
+
+    def undo(self) -> bool:
+        """Restore the previous snapshot. Returns True if successful."""
+        if not self._snapshots:
+            return False
+        turn_count, messages = self._snapshots.pop()
+        self.turn_count = turn_count
+        self.history._messages = messages
+        self.tracker.update(self.history.messages)
+        return True
+
+    @property
+    def can_undo(self) -> bool:
+        """Whether there's a snapshot to undo to."""
+        return len(self._snapshots) > 0
+
+    def turn(self, user_message: str) -> str:
+        """Process one user message through the agentic loop.
+
+        This is the core loop:
+        1. Save snapshot for undo
+        2. Add user message to history
+        3. Call LLM (streaming)
+        4. If tool calls → execute them, feed results back, repeat
+        5. If just text → return it
+
+        Returns the final text response from the LLM.
+        """
+        # Save state before this turn (for undo)
+        self.snapshot()
+        self.turn_count += 1
+        self.history.add_user(user_message)
+
+        for iteration in range(MAX_ITERATIONS):
+            # Update context tracker before each LLM call
+            self.tracker.update(self.history.messages)
+
+            # Token budget check
+            if self.max_tokens > 0 and self.tracker.total_tokens > self.max_tokens:
+                self.console.print(
+                    f"\n[red]Token budget exceeded: "
+                    f"{self.tracker.total_tokens:,} / {self.max_tokens:,}[/red]"
+                )
+                return "Stopped: token budget exceeded."
+
+            status_style = "red" if self.tracker.is_warning else "dim"
+            self.console.print(
+                f"\n[{status_style}]{self.tracker.format_turn_summary(self.turn_count)}[/{status_style}]"
+            )
+
+            # --- LLM call with error recovery ---
+            try:
+                stream = self.client.chat_stream(
+                    self.history.messages, tools=self.tool_schemas
+                )
+            except (APIConnectionError, APITimeoutError, InternalServerError) as e:
+                self.console.print(
+                    f"\n[red]LLM API error (after retries): {e}[/red]"
+                )
+                return f"Stopped: LLM API error — {e}"
+
+            # consume_stream prints text tokens as they arrive and
+            # accumulates tool call fragments into complete tool calls
+            result = consume_stream(stream, print_text=True)
+
+            # --- Case 1: No tool calls → LLM is done ---
+            if not result.has_tool_calls:
+                self.history.add_assistant(result.to_message_dict())
+                self.tracker.update(self.history.messages)
+                self.console.print(
+                    f"\n[dim]{self.tracker.format_status()}[/dim]"
+                )
+                return result.content
+
+            # --- Case 2: Tool calls → execute and continue ---
+            self.history.add_assistant(result.to_message_dict())
+
+            for tc in result.tool_calls:
+                self.console.print(
+                    f"  [yellow]Tool:[/yellow] {tc.name}"
+                    f"  [dim]{_truncate(tc.arguments, 100)}[/dim]"
+                )
+
+                # --- Safety checks ---
+                # 1. Hard blocks (denylist, path sandbox)
+                denial = self.permissions.check_tool(tc.name, tc.arguments)
+                if denial:
+                    tool_result = f"Error: {denial}"
+                    self.console.print(f"  [red]Blocked:[/red] {denial}")
+                # 2. Permission prompt for dangerous tools
+                elif not self.permissions.prompt_permission(tc.name, tc.arguments):
+                    tool_result = "Error: permission denied by user"
+                    self.console.print("  [yellow]Denied by user.[/yellow]")
+                # 3. Execute (with hooks and structured error recovery)
+                else:
+                    # Pre-tool hook
+                    run_hook(self.config.pre_tool, tc.name, tc.arguments)
+                    tool_result = self.registry.execute(tc.name, tc.arguments)
+                    # Post-tool hook
+                    run_hook(self.config.post_tool, tc.name, tc.arguments)
+
+                    is_error = tool_result.startswith("Error")
+                    if is_error:
+                        self.console.print(
+                            f"  [red]Error:[/red] [dim]{_truncate(tool_result, 200)}[/dim]"
+                        )
+                    else:
+                        self.console.print(
+                            f"  [green]Result:[/green] [dim]{_truncate(tool_result, 200)}[/dim]"
+                        )
+
+                self.history.add_tool_result(tc.id, tool_result)
+
+            # --- Context compaction ---
+            if compact(self.history, self.tracker, self.client):
+                self.console.print(
+                    "[dim italic]  (compacted conversation history)[/dim italic]"
+                )
+
+        # Hit MAX_ITERATIONS
+        self.tracker.update(self.history.messages)
+        self.console.print(f"\n[red]{self.tracker.format_status()}[/red]")
+        self.console.print("[red]Warning: hit maximum iterations, stopping.[/red]")
+        return "Stopped: exceeded maximum iterations."
+
+
+def run(
+    user_message: str,
+    client: LLMClient | None = None,
+    context_window: int = 65536,
+) -> str:
+    """One-shot convenience function: create a session, run one turn, return."""
+    session = Session(client=client, context_window=context_window)
+    return session.turn(user_message)
+
+
+def _truncate(text: str, max_len: int) -> str:
+    """Truncate text for display, replacing newlines with spaces."""
+    flat = text.replace("\n", " ")
+    if len(flat) > max_len:
+        return flat[:max_len] + "..."
+    return flat

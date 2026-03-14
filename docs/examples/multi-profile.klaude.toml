@@ -1,0 +1,21 @@
+# Multiple profiles — switch with --profile
+#
+#   uv run klaude "task"                    # uses [default] (local)
+#   uv run klaude --profile openai "task"   # uses [profiles.openai]
+#   uv run klaude --profile ollama "task"   # uses [profiles.ollama]
+
+[default]
+model = "qwen3-coder-next"
+base_url = "http://localhost:8080/v1"
+context_window = 65536
+
+[profiles.openai]
+model = "gpt-4o"
+base_url = "https://api.openai.com/v1"
+api_key_env = "OPENAI_API_KEY"
+context_window = 128000
+
+[profiles.ollama]
+model = "qwen2.5-coder:32b"
+base_url = "http://localhost:11434/v1"
+context_window = 32768
