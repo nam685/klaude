@@ -118,6 +118,11 @@ def consume_stream(
     _print_pending = ""
     _suppressing_tool_text = False
 
+    # Thinking block suppression: Qwen3 models emit <think>...</think>
+    # reasoning blocks before their actual response. Hide these from the user.
+    _in_think_block = False
+    _think_buffer = ""
+
     interrupted = False
     disconnected = False
     try:
@@ -130,7 +135,7 @@ def consume_stream(
             # Stop spinner only for text content.  For tool-call-only
             # responses the spinner stays alive with a progress label,
             # eliminating the visual gap + blank lines before execution.
-            if delta.content and spinner and not _suppressing_tool_text:
+            if delta.content and spinner and not _suppressing_tool_text and not _in_think_block:
                 spinner.stop()
                 spinner = None
 
@@ -138,10 +143,42 @@ def consume_stream(
             if delta.content:
                 result.content += delta.content
 
+                # Suppress <think>...</think> blocks from display.
+                # Content still goes into result.content (for context)
+                # but is stripped before printing.
+                _display_text = delta.content
+                if _in_think_block:
+                    # Inside a think block — check for closing tag
+                    _think_buffer += delta.content
+                    _end = _think_buffer.find("</think>")
+                    if _end != -1:
+                        _in_think_block = False
+                        # Text after </think> is displayable
+                        _display_text = _think_buffer[_end + 8 :]
+                        _think_buffer = ""
+                        if not _display_text:
+                            continue
+                    else:
+                        continue  # Still inside think block
+                elif "<think>" in _display_text:
+                    _start = _display_text.find("<think>")
+                    before = _display_text[:_start]
+                    after = _display_text[_start + 7 :]
+                    # Check if </think> is in the same chunk
+                    _end = after.find("</think>")
+                    if _end != -1:
+                        _display_text = before + after[_end + 8 :]
+                    else:
+                        _in_think_block = True
+                        _think_buffer = after
+                        _display_text = before
+                    if not _display_text:
+                        continue
+
                 if _suppressing_tool_text:
                     pass  # Already detected tool call markup, skip printing
                 elif printer:
-                    _print_pending += delta.content
+                    _print_pending += _display_text
 
                     # Check for complete tool call marker
                     _marker_found = False
@@ -242,6 +279,13 @@ def consume_stream(
             result.content += "\n\n[server disconnected]"
         else:
             result.content = "[server disconnected]"
+
+    # Strip think blocks from content before storing in history
+    import re
+
+    result.content = re.sub(
+        r"<think>.*?</think>\s*", "", result.content, flags=re.DOTALL
+    )
 
     # Collect accumulated tool calls in order
     for idx in sorted(tool_calls_by_index):
