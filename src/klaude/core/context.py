@@ -1,15 +1,11 @@
-"""Context tracking — estimates token usage and tracks context window consumption.
+"""Context tracking — tracks token usage and context window consumption.
 
-Why estimation, not exact counting?
+Two counting strategies:
 
-Local models like Qwen3-Coder-30B-A3B use their own tokenizer (not OpenAI's tiktoken).
-Exact counting would require either:
-  1. Loading the HuggingFace tokenizer (heavy dependency: transformers + torch)
-  2. Hitting the server's /tokenize endpoint (non-standard, requires server up)
-
-Instead, we use a simple heuristic: ~4 characters per token. This is roughly
-75-80% accurate for English text and code. Good enough for tracking context
-usage and knowing when to compact — we don't need exact numbers.
+  1. Exact (preferred): server's /tokenize endpoint, cached for repeated strings
+     (system prompt, tool schemas). Used for tool overhead when client is available.
+  2. Estimate (fallback): chars/4 heuristic (~75-80% accurate for English/code).
+     Used for per-message counts and when /tokenize is unavailable.
 
 The per-message overhead (~4 tokens) accounts for the role label, message
 delimiters, and other formatting that the model sees but isn't in the content.
