@@ -1,0 +1,9 @@
+[default]
+model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
+base_url = "http://localhost:8080/v1"
+
+# GitHub — PR management, issues, code search (official Go binary)
+[mcp.servers.github]
+command = "/Users/nam/.local/bin/github-mcp-server"
+args = ["stdio"]
+env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_TOKEN" }

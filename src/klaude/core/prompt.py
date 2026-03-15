@@ -64,4 +64,5 @@ You help with software engineering: writing code, fixing bugs, refactoring, expl
 
 # Skills
 Users invoke reusable prompts with /skill_name. Built-in: /commit, /review, /explain.
-{_memory_section}"""
+{_memory_section}
+/no_think"""
