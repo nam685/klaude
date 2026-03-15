@@ -120,8 +120,6 @@ src/klaude/
     team.py        Team tools (create, delegate, message)
 ```
 
-40 Python files, ~5,300 lines. 4 dependencies.
-
 ## Documentation
 
 | Doc | Description |
@@ -143,7 +141,7 @@ src/klaude/
 | [04-qwen3-coder-30b.md](docs/04-qwen3-coder-30b.md) | Model guide |
 | [05-architecture-decisions.md](docs/05-architecture-decisions.md) | ADRs |
 | [06-hardware-guide.md](docs/06-hardware-guide.md) | Hardware recommendations |
-| [07-implementation-notes.md](docs/07-implementation-notes.md) | 46 implementation notes |
+| [07-implementation-notes.md](docs/07-implementation-notes.md) | Implementation notes |
 
 ## License
 
