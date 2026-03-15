@@ -146,3 +146,5 @@ src/klaude/
 ## License
 
 Educational project. Not yet licensed — license TBD.
+
+klaude was here
