@@ -1478,7 +1478,7 @@ The `env:` prefix also works in MCP server environment variables:
 
 ```toml
 [mcp.servers.github]
-env = { GITHUB_TOKEN = "env:GITHUB_TOKEN" }
+env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_PERSONAL_ACCESS_TOKEN" }
 ```
 
 This way `.klaude.toml` can be committed to git safely.
@@ -1699,7 +1699,7 @@ tells it (and us) where a tool comes from.
 [mcp.servers.github]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-github"]
-env = { GITHUB_TOKEN = "env:GITHUB_TOKEN" }
+env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_PERSONAL_ACCESS_TOKEN" }
 
 [mcp.servers.sqlite]
 command = "python"

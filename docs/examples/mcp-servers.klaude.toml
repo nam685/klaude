@@ -10,7 +10,7 @@ base_url = "http://localhost:8080/v1"
 [mcp.servers.github]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-github"]
-env = { GITHUB_TOKEN = "env:GITHUB_TOKEN" }
+env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_PERSONAL_ACCESS_TOKEN" }
 
 # Filesystem — read/write files outside the working directory
 [mcp.servers.filesystem]

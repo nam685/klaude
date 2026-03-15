@@ -157,7 +157,7 @@ skills_dir = ".klaude/skills"       # custom skills
 [mcp.servers.github]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-github"]
-env = { GITHUB_TOKEN = "env:GITHUB_TOKEN" }
+env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_PERSONAL_ACCESS_TOKEN" }
 ```
 
 ### CLI flags
@@ -272,7 +272,7 @@ Connect to external tool servers via [Model Context Protocol](https://modelconte
 [mcp.servers.github]
 command = "npx"
 args = ["-y", "@modelcontextprotocol/server-github"]
-env = { GITHUB_TOKEN = "env:GITHUB_TOKEN" }
+env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_PERSONAL_ACCESS_TOKEN" }
 
 [mcp.servers.filesystem]
 command = "npx"

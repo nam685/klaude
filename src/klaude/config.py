@@ -29,7 +29,7 @@ The config file supports model profiles:
     [mcp.servers.github]
     command = "npx"
     args = ["-y", "@modelcontextprotocol/server-github"]
-    env = { GITHUB_TOKEN = "env:GITHUB_TOKEN" }
+    env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_PERSONAL_ACCESS_TOKEN" }
 
 See Note 28 in docs/07-implementation-notes.md.
 """
