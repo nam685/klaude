@@ -117,6 +117,7 @@ def main(
         base_url=effective_base_url,
         model=effective_model,
         api_key=cfg.api_key,
+        thinking=cfg.thinking,
     )
     session = Session(
         client=client,

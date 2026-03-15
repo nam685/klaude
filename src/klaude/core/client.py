@@ -39,9 +39,15 @@ class LLMClient:
         base_url: str = DEFAULT_BASE_URL,
         model: str = DEFAULT_MODEL,
         api_key: str = "not-needed",
+        thinking: bool = False,
     ):
         self.model = model
         self.base_url = base_url
+        # Disable Qwen3 thinking by default for faster responses.
+        # mlx-lm passes chat_template_kwargs through to the Jinja template.
+        self.extra_body: dict | None = (
+            None if thinking else {"chat_template_kwargs": {"enable_thinking": False}}
+        )
         # Explicit httpx client that bypasses proxy env vars (ALL_PROXY, etc.).
         # Without this, httpx tries to route localhost through a SOCKS proxy.
         transport = httpx.HTTPTransport()
@@ -64,6 +70,8 @@ class LLMClient:
         }
         if tools:
             kwargs["tools"] = tools
+        if self.extra_body:
+            kwargs["extra_body"] = self.extra_body
 
         return self._retry(lambda: self.client.chat.completions.create(**kwargs))
 
@@ -85,6 +93,8 @@ class LLMClient:
         }
         if tools:
             kwargs["tools"] = tools
+        if self.extra_body:
+            kwargs["extra_body"] = self.extra_body
 
         return self._retry(lambda: self.client.chat.completions.create(**kwargs))
 

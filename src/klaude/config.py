@@ -66,6 +66,7 @@ class KlaudeConfig:
     context_window: int = 32768
     max_tokens: int = 0
     auto_approve: bool = False
+    thinking: bool = False
 
     # Hooks (shell commands, "" = disabled)
     pre_tool: str = ""
@@ -156,6 +157,8 @@ def load_config(
         config.max_tokens = int(default["max_tokens"])
     if "auto_approve" in default:
         config.auto_approve = bool(default["auto_approve"])
+    if "thinking" in default:
+        config.thinking = bool(default["thinking"])
     if "undo_depth" in default:
         config.undo_depth = int(default["undo_depth"])
 
