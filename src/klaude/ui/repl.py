@@ -19,6 +19,7 @@ Slash commands:
     /context      — show current context usage
     /history      — show message history debug view
     /undo         — undo the last turn (Esc also works)
+    /thinking     — toggle showing model's thinking (Ctrl+O)
     /plan         — toggle plan mode (read-only, no writes/bash)
     /cron         — manage scheduled tasks (/cron 5m <prompt>, /cron list, /cron stop <id>)
     /skills       — list available skills
@@ -55,11 +56,13 @@ def _setup_readline() -> None:
         if "libedit" in readline.__doc__:  # type: ignore[operator]
             # macOS libedit syntax
             readline.parse_and_bind('bind "\\e" "\\e[H\\e[2K/undo\\n"')
+            readline.parse_and_bind('bind "\\x0f" "\\e[H\\e[2K/thinking\\n"')  # Ctrl+O
         else:
             # GNU readline syntax
             readline.parse_and_bind('"\\e": "\\C-a\\C-k/undo\\C-m"')
+            readline.parse_and_bind('"\\C-o": "\\C-a\\C-k/thinking\\C-m"')
     except Exception:
-        pass  # if binding fails, /undo still works as a typed command
+        pass  # if binding fails, commands still work typed manually
 
 
 def _save_readline() -> None:
@@ -135,6 +138,15 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
             console.print("[yellow]Nothing to undo.[/yellow]")
         return True
 
+    if cmd == "/thinking":
+        from klaude.core import stream as _stream_mod
+
+        _stream_mod.show_thinking = not _stream_mod.show_thinking
+        state = "ON" if _stream_mod.show_thinking else "OFF"
+        color = "cyan" if _stream_mod.show_thinking else "dim"
+        console.print(f"[{color}]Show thinking: {state}[/{color}]  (Ctrl+O to toggle)")
+        return True
+
     if cmd == "/plan":
         session.permissions.plan_mode = not session.permissions.plan_mode
         state = "ON (read-only)" if session.permissions.plan_mode else "OFF (full access)"
@@ -189,7 +201,7 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
 
     console.print(f"[red]Unknown command: {cmd}[/red]")
     console.print(
-        "[dim]Commands: /exit /quit /clear /context /history /undo /plan /cron /skills /sessions[/dim]"
+        "[dim]Commands: /exit /clear /context /history /undo /plan /thinking /cron /skills /sessions[/dim]"
     )
     if session.skills:
         names = ", ".join(f"/{n}" for n in sorted(session.skills))

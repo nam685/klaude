@@ -32,6 +32,10 @@ from klaude.ui.render import StreamPrinter
 
 console = Console()
 
+# Toggle: when True, display <think> blocks dimmed instead of hiding them.
+# Toggled by Ctrl+O or /thinking in the REPL.
+show_thinking = False
+
 
 @dataclass
 class ToolCallAccumulator:
@@ -118,10 +122,12 @@ def consume_stream(
     _print_pending = ""
     _suppressing_tool_text = False
 
-    # Thinking block suppression: Qwen3 models emit <think>...</think>
-    # reasoning blocks before their actual response. Hide these from the user.
+    # Thinking block handling: Qwen3 models emit <think>...</think>
+    # reasoning blocks before their actual response.
+    # When show_thinking is True, display them dimmed; otherwise hide.
     _in_think_block = False
     _think_buffer = ""
+    _think_printer_active = False  # True while we're printing a think block
 
     interrupted = False
     disconnected = False
@@ -143,30 +149,50 @@ def consume_stream(
             if delta.content:
                 result.content += delta.content
 
-                # Suppress <think>...</think> blocks from display.
-                # Content still goes into result.content (for context)
-                # but is stripped before printing.
+                # Handle <think>...</think> blocks.
+                # Content always goes into result.content.
+                # Display behavior depends on show_thinking toggle.
                 _display_text = delta.content
                 if _in_think_block:
-                    # Inside a think block — check for closing tag
                     _think_buffer += delta.content
                     _end = _think_buffer.find("</think>")
                     if _end != -1:
                         _in_think_block = False
-                        # Text after </think> is displayable
-                        _display_text = _think_buffer[_end + 8 :]
+                        remaining_think = _think_buffer[:_end]
+                        after_think = _think_buffer[_end + 8 :]
                         _think_buffer = ""
+                        if show_thinking and printer and remaining_think:
+                            console.print(remaining_think, end="", style="dim")
+                        if show_thinking and _think_printer_active:
+                            console.print("", style="dim")  # newline
+                            _think_printer_active = False
+                        _display_text = after_think
                         if not _display_text:
                             continue
                     else:
-                        continue  # Still inside think block
+                        # Still inside think block
+                        if show_thinking and printer:
+                            if not _think_printer_active:
+                                if spinner:
+                                    spinner.stop()
+                                    spinner = None
+                                console.print("[dim italic]thinking:[/dim italic]")
+                                _think_printer_active = True
+                            console.print(_think_buffer, end="", style="dim")
+                            _think_buffer = ""
+                        continue
                 elif "<think>" in _display_text:
                     _start = _display_text.find("<think>")
                     before = _display_text[:_start]
                     after = _display_text[_start + 7 :]
-                    # Check if </think> is in the same chunk
                     _end = after.find("</think>")
                     if _end != -1:
+                        if show_thinking and printer and after[:_end]:
+                            if spinner:
+                                spinner.stop()
+                                spinner = None
+                            console.print("[dim italic]thinking:[/dim italic]")
+                            console.print(after[:_end], style="dim")
                         _display_text = before + after[_end + 8 :]
                     else:
                         _in_think_block = True
