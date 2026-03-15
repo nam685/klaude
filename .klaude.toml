@@ -5,5 +5,5 @@ base_url = "http://localhost:8080/v1"
 # GitHub — PR management, issues, code search (official Go binary)
 [mcp.servers.github]
 command = "/Users/nam/.local/bin/github-mcp-server"
-args = ["stdio"]
+args = ["stdio", "--toolsets", "repos,issues,pull_requests"]
 env = { GITHUB_PERSONAL_ACCESS_TOKEN = "env:GITHUB_TOKEN" }
