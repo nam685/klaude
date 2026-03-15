@@ -40,7 +40,7 @@ if [[ "${1:-}" == "--serve" ]]; then
     fi
 
     # Check if model is downloaded (HF cache: ~/.cache/huggingface/hub/)
-    MODEL_CACHE="$HOME/.cache/huggingface/hub/models--$(echo "$MLX_MODEL" | tr '/' '--')"
+    MODEL_CACHE="$HOME/.cache/huggingface/hub/models--${MLX_MODEL//\//--}"
     if [[ ! -d "$MODEL_CACHE" ]]; then
         warn "Model not found in cache: $MLX_MODEL"
         warn "Download it first:"
@@ -112,7 +112,7 @@ elif command -v huggingface-cli &>/dev/null; then
 fi
 
 # Verify download
-MODEL_CACHE="$HOME/.cache/huggingface/hub/models--$(echo "$MLX_MODEL" | tr '/' '--')"
+MODEL_CACHE="$HOME/.cache/huggingface/hub/models--${MLX_MODEL//\//--}"
 SNAPSHOT_DIR=$(find "$MODEL_CACHE/snapshots" -maxdepth 1 -mindepth 1 -type d 2>/dev/null | head -1)
 if [[ -z "$SNAPSHOT_DIR" ]] || [[ ! -f "$SNAPSHOT_DIR/config.json" ]]; then
     error "Download incomplete. Re-run this script to resume."
