@@ -19,4 +19,5 @@
 ## Running
 - `uv sync` to install deps
 - `uv run klaude "task"` to run the CLI
+- `uv run klaude --json "task"` for headless/server mode (see docs/SERVER.md)
 - LLM backend: mlx-lm (mlx_lm.server) on localhost:8080

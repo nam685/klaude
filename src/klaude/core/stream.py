@@ -89,6 +89,7 @@ class StreamResult:
 def consume_stream(
     stream: Stream[ChatCompletionChunk],
     print_text: bool = True,
+    quiet: bool = False,
 ) -> StreamResult:
     """Consume a streaming response, printing text as it arrives.
 
@@ -101,6 +102,7 @@ def consume_stream(
     Args:
         stream: The streaming response from client.chat_stream()
         print_text: Whether to print text deltas to the console
+        quiet: When True, suppress all console output (spinner, text, errors)
 
     Returns:
         StreamResult with accumulated content and/or tool calls
@@ -110,11 +112,13 @@ def consume_stream(
     tool_calls_by_index: dict[int, ToolCallAccumulator] = {}
 
     # Show a spinner until the first token arrives
-    spinner: Status | None = Status("Thinking...", console=console, spinner="dots")
-    spinner.start()
+    spinner: Status | None = None
+    if not quiet:
+        spinner = Status("Thinking...", console=console, spinner="dots")
+        spinner.start()
 
     # Rich rendering for code blocks in streaming output
-    printer = StreamPrinter(console) if print_text else None
+    printer = StreamPrinter(console) if (print_text and not quiet) else None
 
     # Text-based tool call suppression: buffer content near '<' to detect
     # model-native tool call markup before printing it.
@@ -281,7 +285,8 @@ def consume_stream(
         # Keep whatever content was already received and report the disconnect.
         disconnected = True
         tool_calls_by_index.clear()
-        console.print(f"\n[red]Server disconnected: {e}[/red]")
+        if not quiet:
+            console.print(f"\n[red]Server disconnected: {e}[/red]")
     finally:
         if spinner is not None:
             spinner.stop()

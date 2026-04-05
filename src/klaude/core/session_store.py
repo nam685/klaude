@@ -20,9 +20,12 @@ SESSIONS_DIR = ".klaude/sessions"
 MAX_SESSIONS = 10
 
 
-def _sessions_dir() -> Path:
+def _sessions_dir(session_dir: Path | None = None) -> Path:
     """Get the sessions directory, creating it if needed."""
-    path = Path(os.getcwd()) / SESSIONS_DIR
+    if session_dir is not None:
+        path = Path(session_dir)
+    else:
+        path = Path(os.getcwd()) / SESSIONS_DIR
     path.mkdir(parents=True, exist_ok=True)
     return path
 
@@ -42,6 +45,7 @@ def save_session(
     messages: list[dict[str, Any]],
     turn_count: int,
     session_id: str | None = None,
+    session_dir: Path | None = None,
 ) -> str:
     """Save session state. Returns the session ID.
 
@@ -51,7 +55,7 @@ def save_session(
     if session_id is None:
         session_id = time.strftime("%Y%m%d-%H%M%S")
 
-    sessions = _sessions_dir()
+    sessions = _sessions_dir(session_dir)
     non_system = messages[1:]  # skip system prompt
 
     data = {
@@ -103,12 +107,15 @@ def list_sessions() -> list[dict[str, Any]]:
     return result
 
 
-def load_session(session_id: str | None = None) -> tuple[list[dict[str, Any]], int, str, str] | None:
+def load_session(session_id: str | None = None, session_dir: Path | None = None) -> tuple[list[dict[str, Any]], int, str, str] | None:
     """Load a session by ID, or the most recent if ID is None.
 
     Returns (messages_without_system_prompt, turn_count, saved_at, session_id) or None.
     """
-    sessions_dir = Path(os.getcwd()) / SESSIONS_DIR
+    if session_dir is not None:
+        sessions_dir = Path(session_dir)
+    else:
+        sessions_dir = Path(os.getcwd()) / SESSIONS_DIR
     if not sessions_dir.exists():
         return None
 
