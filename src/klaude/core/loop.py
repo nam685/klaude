@@ -140,10 +140,12 @@ class Session:
         auto_approve: bool = False,
         max_tokens: int = 0,
         config: KlaudeConfig | None = None,
+        quiet: bool = False,
     ) -> None:
         self.config = config or KlaudeConfig()
         self.client = client or LLMClient()
         self.console = console or Console()
+        self.quiet = quiet
         set_sub_agent_client(self.client)  # share client with sub-agents
         set_team_client(self.client)  # share client with team agents
         set_ask_user_console(self.console)  # share console with ask_user tool
@@ -152,7 +154,8 @@ class Session:
         # Load custom tool plugins from .klaude/tools/
         for plugin_tool in load_plugin_tools(self.config.tools_dir):
             self.registry.register(plugin_tool, is_plugin=True)
-            self.console.print(f"[dim]Loaded plugin tool: {plugin_tool.name}[/dim]")
+            if not self.quiet:
+                self.console.print(f"[dim]Loaded plugin tool: {plugin_tool.name}[/dim]")
 
         # Connect to MCP servers (if configured)
         self._mcp_bridge: MCPBridge | None = None
@@ -161,8 +164,9 @@ class Session:
             mcp_tools = self._mcp_bridge.connect_all(self.config.mcp_servers)
             for mcp_tool in mcp_tools:
                 self.registry.register(mcp_tool, is_plugin=True)
-                self.console.print(f"[dim]MCP tool: {mcp_tool.name}[/dim]")
-            if self._mcp_bridge.server_names:
+                if not self.quiet:
+                    self.console.print(f"[dim]MCP tool: {mcp_tool.name}[/dim]")
+            if self._mcp_bridge.server_names and not self.quiet:
                 self.console.print(
                     f"[dim]Connected to MCP servers: {', '.join(self._mcp_bridge.server_names)}[/dim]"
                 )
@@ -177,15 +181,17 @@ class Session:
         if detected:
             # Server reports its actual capacity — use the smaller value
             if detected < effective_window:
-                self.console.print(
-                    f"[dim]Server context: {detected:,} tokens "
-                    f"(config: {effective_window:,}, using server value)[/dim]"
-                )
+                if not self.quiet:
+                    self.console.print(
+                        f"[dim]Server context: {detected:,} tokens "
+                        f"(config: {effective_window:,}, using server value)[/dim]"
+                    )
                 effective_window = detected
             else:
-                self.console.print(
-                    f"[dim]Server context: {detected:,} tokens[/dim]"
-                )
+                if not self.quiet:
+                    self.console.print(
+                        f"[dim]Server context: {detected:,} tokens[/dim]"
+                    )
 
         # --- Dynamic tool loading ---
         self._tool_tiers = _select_tool_tiers(effective_window)
@@ -193,9 +199,10 @@ class Session:
 
         tier_names = ", ".join(sorted(self._tool_tiers))
         schema_count = len(self.tool_schemas)
-        self.console.print(
-            f"[dim]Tools: {schema_count} loaded (tiers: {tier_names})[/dim]"
-        )
+        if not self.quiet:
+            self.console.print(
+                f"[dim]Tools: {schema_count} loaded (tiers: {tier_names})[/dim]"
+            )
 
         # --- Context tracker with optional exact tokenization ---
         self.tracker = ContextTracker(context_window=effective_window)
@@ -207,12 +214,13 @@ class Session:
         )
         self.max_tokens = max_tokens
         self.turn_count = 0
+        self.total_tool_calls = 0
 
         # Skills (reusable prompt templates)
         self.skills: dict[str, Skill] = load_all_skills(self.config.skills_dir)
 
         # Persistent status bar (caller must .start()/.stop())
-        self.status_bar = StatusBar()
+        self.status_bar = StatusBar(quiet=self.quiet)
 
         # Undo snapshots: list of (turn_count, history_messages_copy)
         self._snapshots: list[tuple[int, list[dict]]] = []
@@ -275,10 +283,11 @@ class Session:
 
             # Token budget check
             if self.max_tokens > 0 and self.tracker.total_tokens > self.max_tokens:
-                self.console.print(
-                    f"\n[red]Token budget exceeded: "
-                    f"{self.tracker.total_tokens:,} / {self.max_tokens:,}[/red]"
-                )
+                if not self.quiet:
+                    self.console.print(
+                        f"\n[red]Token budget exceeded: "
+                        f"{self.tracker.total_tokens:,} / {self.max_tokens:,}[/red]"
+                    )
                 return "Stopped: token budget exceeded."
 
             self.status_bar.update(
@@ -291,14 +300,15 @@ class Session:
                     self.history.messages, tools=self.tool_schemas
                 )
             except (APIConnectionError, APITimeoutError, InternalServerError) as e:
-                self.console.print(
-                    f"\n[red]LLM API error (after retries): {e}[/red]"
-                )
+                if not self.quiet:
+                    self.console.print(
+                        f"\n[red]LLM API error (after retries): {e}[/red]"
+                    )
                 return f"Stopped: LLM API error — {e}"
 
             # consume_stream prints text tokens as they arrive and
             # accumulates tool call fragments into complete tool calls
-            result = consume_stream(stream, print_text=True)
+            result = consume_stream(stream, print_text=True, quiet=self.quiet)
 
             # --- Case 1: No tool calls → LLM is done ---
             if not result.has_tool_calls:
@@ -307,28 +317,33 @@ class Session:
                 self.status_bar.update(
                     self.tracker.format_compact(self.turn_count)
                 )
-                self.console.print()  # blank line after response
+                if not self.quiet:
+                    self.console.print()  # blank line after response
                 return result.content
 
             # --- Case 2: Tool calls → execute and continue ---
             self.history.add_assistant(result.to_message_dict())
 
             for tc in result.tool_calls:
-                self.console.print(
-                    f"  [yellow]Tool:[/yellow] {tc.name}"
-                    f"  [dim]{_truncate(tc.arguments, 100)}[/dim]"
-                )
+                self.total_tool_calls += 1
+                if not self.quiet:
+                    self.console.print(
+                        f"  [yellow]Tool:[/yellow] {tc.name}"
+                        f"  [dim]{_truncate(tc.arguments, 100)}[/dim]"
+                    )
 
                 # --- Safety checks ---
                 # 1. Hard blocks (denylist, path sandbox)
                 denial = self.permissions.check_tool(tc.name, tc.arguments)
                 if denial:
                     tool_result = f"Error: {denial}"
-                    self.console.print(f"  [red]Blocked:[/red] {denial}")
+                    if not self.quiet:
+                        self.console.print(f"  [red]Blocked:[/red] {denial}")
                 # 2. Permission prompt for dangerous tools
                 elif not self.permissions.prompt_permission(tc.name, tc.arguments):
                     tool_result = "Error: permission denied by user"
-                    self.console.print("  [yellow]Denied by user.[/yellow]")
+                    if not self.quiet:
+                        self.console.print("  [yellow]Denied by user.[/yellow]")
                 # 3. Execute (with hooks and structured error recovery)
                 else:
                     # Pre-tool hook
@@ -339,28 +354,32 @@ class Session:
 
                     is_error = tool_result.startswith("Error")
                     if is_error:
-                        self.console.print(
-                            f"  [red]Error:[/red] [dim]{_truncate(tool_result, 200)}[/dim]"
-                        )
+                        if not self.quiet:
+                            self.console.print(
+                                f"  [red]Error:[/red] [dim]{_truncate(tool_result, 200)}[/dim]"
+                            )
                     else:
-                        self.console.print(
-                            f"  [green]Result:[/green] [dim]{_truncate(tool_result, 200)}[/dim]"
-                        )
+                        if not self.quiet:
+                            self.console.print(
+                                f"  [green]Result:[/green] [dim]{_truncate(tool_result, 200)}[/dim]"
+                            )
 
                 self.history.add_tool_result(tc.id, tool_result)
 
             # --- Context compaction ---
             if compact(self.history, self.tracker, self.client):
-                self.console.print(
-                    "[dim italic]  (compacted conversation history)[/dim italic]"
-                )
+                if not self.quiet:
+                    self.console.print(
+                        "[dim italic]  (compacted conversation history)[/dim italic]"
+                    )
 
         # Hit MAX_ITERATIONS
         self.tracker.update(self.history.messages)
         self.status_bar.update(
             self.tracker.format_compact(self.turn_count)
         )
-        self.console.print("[red]Warning: hit maximum iterations, stopping.[/red]")
+        if not self.quiet:
+            self.console.print("[red]Warning: hit maximum iterations, stopping.[/red]")
         return "Stopped: exceeded maximum iterations."
 
 
