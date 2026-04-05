@@ -6,9 +6,15 @@ Modes:
     klaude -c                 -> resume last session (REPL)
     klaude --resume <id>      -> resume specific session (REPL)
     klaude -c "more work"     -> resume last session + one-shot task
+    klaude --json "task"      -> headless mode (structured JSON output)
 
 Config resolution: CLI flags > env vars > .klaude.toml > defaults.
 """
+
+import json
+import os
+import signal
+import sys
 
 import click
 from rich.console import Console
@@ -19,6 +25,63 @@ from klaude.core.loop import Session
 from klaude.core.session_store import load_session, save_session
 
 console = Console()
+
+# Module-level reference for SIGTERM handler to access
+_active_session: Session | None = None
+_json_mode: bool = False
+_session_dir_override: str | None = None
+
+
+def _build_json_summary(
+    session: Session,
+    session_id: str,
+    session_path: str,
+    error: str | None = None,
+) -> dict:
+    """Build the JSON summary dict for --json output."""
+    return {
+        "session_id": session_id,
+        "session_path": session_path,
+        "turn_count": session.turn_count,
+        "token_count": session.tracker.total_tokens,
+        "tool_calls": session.total_tool_calls,
+        "error": error,
+    }
+
+
+def _save_and_summarize(
+    session: Session,
+    error: str | None = None,
+) -> None:
+    """Save session and print JSON summary if in --json mode."""
+    if session.turn_count == 0:
+        return
+
+    from pathlib import Path
+
+    session_dir = Path(_session_dir_override) if _session_dir_override else None
+    sid = save_session(
+        session.history.messages,
+        session.turn_count,
+        session_dir=session_dir,
+    )
+
+    if _json_mode:
+        if session_dir:
+            session_path = str((session_dir / f"{sid}.json").resolve())
+        else:
+            session_path = str(
+                (Path(os.getcwd()) / ".klaude" / "sessions" / f"{sid}.json").resolve()
+            )
+        summary = _build_json_summary(session, sid, session_path, error=error)
+        print(json.dumps(summary), flush=True)
+
+
+def _sigterm_handler(signum: int, frame: object) -> None:
+    """Handle SIGTERM: save session and exit cleanly."""
+    if _active_session is not None:
+        _save_and_summarize(_active_session, error="SIGTERM")
+    sys.exit(0)
 
 
 @click.command()
@@ -76,6 +139,20 @@ console = Console()
     default=None,
     help="Resume a specific session by ID (see /sessions)",
 )
+@click.option(
+    "--json",
+    "json_mode",
+    is_flag=True,
+    default=False,
+    envvar="KLAUDE_JSON",
+    help="Headless mode: suppress TUI, print JSON summary on exit",
+)
+@click.option(
+    "--session-dir",
+    default=None,
+    envvar="KLAUDE_SESSION_DIR",
+    help="Override directory for session files",
+)
 def main(
     task: tuple[str, ...],
     base_url: str | None,
@@ -86,6 +163,8 @@ def main(
     profile: str | None,
     continue_session: bool,
     resume_id: str | None,
+    json_mode: bool,
+    session_dir: str | None,
 ) -> None:
     """klaude — DIY Claude Code harness powered by open-source LLMs.
 
@@ -102,7 +181,22 @@ def main(
     Resume the last session:
 
         klaude -c
+
+    Headless mode (for server integration):
+
+        klaude --json "fix the bug"
     """
+    global _active_session, _json_mode, _session_dir_override
+    _json_mode = json_mode
+    _session_dir_override = session_dir
+
+    # --json implies --auto-approve (headless can't prompt)
+    if json_mode:
+        auto_approve = True
+
+    # Register SIGTERM handler
+    signal.signal(signal.SIGTERM, _sigterm_handler)
+
     # Load config from .klaude.toml (CLI flags override)
     cfg = load_config(profile=profile)
 
@@ -113,6 +207,9 @@ def main(
     effective_max_tokens = max_tokens if max_tokens is not None else cfg.max_tokens
     effective_auto_approve = auto_approve or cfg.auto_approve
 
+    # In --json mode, use a quiet console that discards output
+    active_console = Console(file=open(os.devnull, "w")) if json_mode else console
+
     client = LLMClient(
         base_url=effective_base_url,
         model=effective_model,
@@ -122,11 +219,13 @@ def main(
     session = Session(
         client=client,
         context_window=effective_context_window,
-        console=console,
+        console=active_console,
         auto_approve=effective_auto_approve,
         max_tokens=effective_max_tokens,
         config=cfg,
+        quiet=json_mode,
     )
+    _active_session = session
 
     # --- Resume previous session ---
     if continue_session or resume_id:
@@ -134,41 +233,59 @@ def main(
         if saved:
             messages, turns, saved_at, sid = saved
             session.restore(messages, turns)
-            console.print(
-                f"[dim]Resumed session {sid} ({turns} turns, "
-                f"{session.tracker.total_tokens:,} tokens, "
-                f"saved {saved_at})[/dim]"
-            )
+            if not json_mode:
+                active_console.print(
+                    f"[dim]Resumed session {sid} ({turns} turns, "
+                    f"{session.tracker.total_tokens:,} tokens, "
+                    f"saved {saved_at})[/dim]"
+                )
         else:
-            console.print("[yellow]No previous session found.[/yellow]")
+            if not json_mode:
+                active_console.print("[yellow]No previous session found.[/yellow]")
 
-    if not task:
+    if not task and not json_mode:
         # --- REPL mode ---
         from klaude.ui.repl import repl
 
         try:
             repl(session)
         except Exception as e:
-            console.print(f"\n[red]Error: {e}[/red]")
+            active_console.print(f"\n[red]Error: {e}[/red]")
             raise SystemExit(1)
         finally:
-            if session.turn_count > 0:
-                save_session(session.history.messages, session.turn_count)
+            _active_session = None
+            _save_and_summarize(session)
+    elif not task and json_mode:
+        # --json without a task is an error
+        print(
+            json.dumps({"error": "--json requires a task argument"}),
+            file=sys.stderr,
+        )
+        raise SystemExit(1)
     else:
-        # --- One-shot mode ---
+        # --- One-shot mode (normal or --json) ---
         user_message = " ".join(task)
-        console.print(f"[dim]Model: {effective_model} @ {effective_base_url}[/dim]")
-        console.print()
+        if not json_mode:
+            active_console.print(
+                f"[dim]Model: {effective_model} @ {effective_base_url}[/dim]"
+            )
+            active_console.print()
 
         session.status_bar.start()
+        error = None
         try:
             session.turn(user_message)
         except KeyboardInterrupt:
-            console.print("\n[yellow]Interrupted.[/yellow]")
+            error = "interrupted"
+            if not json_mode:
+                active_console.print("\n[yellow]Interrupted.[/yellow]")
         except Exception as e:
-            console.print(f"\n[red]Error: {e}[/red]")
-            raise SystemExit(1)
+            error = str(e)
+            if not json_mode:
+                active_console.print(f"\n[red]Error: {e}[/red]")
+            if not json_mode:
+                raise SystemExit(1)
         finally:
             session.status_bar.stop()
-            if session.turn_count > 0:
-                save_session(session.history.messages, session.turn_count)
+            _active_session = None
+            _save_and_summarize(session, error=error)
