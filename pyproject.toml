@@ -1,6 +1,6 @@
 [project]
 name = "klaude"
-version = "0.1.0"
+dynamic = ["version"]
 description = "DIY Claude Code harness powered by open-source LLMs"
 requires-python = ">=3.12"
 dependencies = [
@@ -17,8 +17,14 @@ klaude = "klaude.ui.cli:main"
 Repository = "https://github.com/nam685/klaude"
 
 [build-system]
-requires = ["hatchling"]
+requires = ["hatchling", "hatch-vcs"]
 build-backend = "hatchling.build"
+
+[tool.hatch.version]
+source = "vcs"
+
+[tool.hatch.build.hooks.vcs]
+version-file = "src/klaude/_version.py"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/klaude"]

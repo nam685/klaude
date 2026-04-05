@@ -113,6 +113,7 @@ def _sigterm_handler(signum: int, frame: object) -> None:
 
 
 @click.command()
+@click.version_option(package_name="klaude")
 @click.argument("task", nargs=-1)
 @click.option(
     "--base-url",

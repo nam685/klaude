@@ -14,6 +14,8 @@ import time
 from pathlib import Path
 from typing import Any
 
+from klaude import __version__
+
 
 class TraceWriter:
     """Append-only ATIF v1.4 trace writer.
@@ -35,7 +37,7 @@ class TraceWriter:
             "session_id": path.stem,
             "agent": {
                 "name": "klaude",
-                "version": "0.1.0",
+                "version": __version__,
                 "model_name": model_name,
             },
             "steps": [],

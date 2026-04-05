@@ -23,6 +23,7 @@ Thumbs.db
 
 # klaude
 .klaude_history
+src/klaude/_version.py
 
 # Models (large files)
 *.gguf
