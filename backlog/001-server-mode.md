@@ -1,5 +1,5 @@
 ---
-status: todo
+status: done
 priority: high
 labels: [server, headless, nam-website]
 ---

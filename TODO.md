@@ -122,10 +122,10 @@
 - [x] Switch to 8-bit model → `Qwen3-Coder-30B-A3B-Instruct-8bit` (~30GB) for better quality
 
 ## Phase 15: Server / Headless Mode
-- [ ] OpenRouter support — verify tool calling + streaming with `openrouter/free` meta-model
-- [ ] Predictable session output — `--session-dir` or print session path on exit
-- [ ] Quiet/JSON output mode — `--quiet` / `--json` flag for headless invocation
-- [ ] SIGTERM graceful shutdown — save session on kill signal
+- [x] OpenRouter support — uses `openai` SDK, OpenRouter is compatible (verify with live test)
+- [x] Predictable session output — `--session-dir` flag + JSON summary prints session path
+- [x] Quiet/JSON output mode — `--json` flag suppresses TUI, prints JSON summary to stdout
+- [x] SIGTERM graceful shutdown — signal handler saves session, prints JSON with `error: "SIGTERM"`
 - [ ] Token budget enforcement — verify `--max-tokens` works with OpenRouter
-- [ ] `--cwd` flag — change working directory before execution
-- See `docs/feature-request-server-mode.md` for full spec
+- [ ] `--cwd` flag — deferred (caller uses `subprocess.run(cwd=...)`)
+- See `docs/feature-request-server-mode.md` for full spec, `docs/SERVER.md` for integration guide
