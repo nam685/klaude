@@ -120,3 +120,12 @@
 - [x] Markdown rendering → `src/klaude/ui/render.py` — bold, italic, inline code, headers, lists, horizontal rules
 - [x] Fix truncated responses → `src/klaude/core/client.py` — send `max_tokens=8192` (mlx-lm defaults to 512)
 - [x] Switch to 8-bit model → `Qwen3-Coder-30B-A3B-Instruct-8bit` (~30GB) for better quality
+
+## Phase 15: Server / Headless Mode
+- [ ] OpenRouter support — verify tool calling + streaming with `openrouter/free` meta-model
+- [ ] Predictable session output — `--session-dir` or print session path on exit
+- [ ] Quiet/JSON output mode — `--quiet` / `--json` flag for headless invocation
+- [ ] SIGTERM graceful shutdown — save session on kill signal
+- [ ] Token budget enforcement — verify `--max-tokens` works with OpenRouter
+- [ ] `--cwd` flag — change working directory before execution
+- See `docs/feature-request-server-mode.md` for full spec
