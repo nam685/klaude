@@ -2,6 +2,12 @@
 model = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
 base_url = "http://localhost:8080/v1"
 
+[profiles.openrouter]
+model = "openrouter/auto"
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+context_window = 32768
+
 # GitHub — PR management, issues, code search (official Go binary)
 [mcp.servers.github]
 command = "/Users/nam/.local/bin/github-mcp-server"
