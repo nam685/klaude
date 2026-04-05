@@ -30,6 +30,7 @@ console = Console()
 _active_session: Session | None = None
 _json_mode: bool = False
 _session_dir_override: str | None = None
+_json_printed: bool = False  # prevent double-printing on SIGTERM
 
 
 def _build_json_summary(
@@ -55,9 +56,11 @@ def _print_json_summary(
     session_path: str | None = None,
     error: str | None = None,
 ) -> None:
-    """Print a JSON summary to stdout. Always prints in --json mode."""
-    if not _json_mode:
+    """Print a JSON summary to stdout. Always prints in --json mode (once)."""
+    global _json_printed
+    if not _json_mode or _json_printed:
         return
+    _json_printed = True
     if session is not None:
         summary = _build_json_summary(session, session_id or "", session_path or "", error=error)
     else:
