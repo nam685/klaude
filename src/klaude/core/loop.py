@@ -20,6 +20,7 @@ from rich.console import Console
 
 from klaude.config import KlaudeConfig
 from klaude.core.client import LLMClient
+from klaude.core.trace import TraceWriter
 from klaude.core.compaction import compact
 from klaude.core.context import ContextTracker
 from klaude.core.history import MessageHistory
@@ -141,6 +142,7 @@ class Session:
         max_tokens: int = 0,
         config: KlaudeConfig | None = None,
         quiet: bool = False,
+        model_name: str = "",
     ) -> None:
         self.config = config or KlaudeConfig()
         self.client = client or LLMClient()
@@ -222,6 +224,10 @@ class Session:
         # Persistent status bar (caller must .start()/.stop())
         self.status_bar = StatusBar(quiet=self.quiet)
 
+        # ATIF trace writer (initialized when session dir is known)
+        self.model_name = model_name
+        self.trace: TraceWriter | None = None
+
         # Undo snapshots: list of (turn_count, history_messages_copy)
         self._snapshots: list[tuple[int, list[dict]]] = []
         self._undo_depth = self.config.undo_depth
@@ -276,6 +282,8 @@ class Session:
         self.snapshot()
         self.turn_count += 1
         self.history.add_user(user_message)
+        if self.trace:
+            self.trace.write_user_step(user_message)
 
         for iteration in range(MAX_ITERATIONS):
             # Update context tracker before each LLM call
@@ -313,6 +321,10 @@ class Session:
             # --- Case 1: No tool calls → LLM is done ---
             if not result.has_tool_calls:
                 self.history.add_assistant(result.to_message_dict())
+                if self.trace:
+                    self.trace.write_agent_step(
+                        result.content, tool_calls=None,
+                    )
                 self.tracker.update(self.history.messages)
                 self.status_bar.update(
                     self.tracker.format_compact(self.turn_count)
@@ -323,6 +335,11 @@ class Session:
 
             # --- Case 2: Tool calls → execute and continue ---
             self.history.add_assistant(result.to_message_dict())
+            if self.trace:
+                self.trace.write_agent_step(
+                    result.content or None,
+                    tool_calls=result.to_message_dict().get("tool_calls"),
+                )
 
             for tc in result.tool_calls:
                 self.total_tool_calls += 1
@@ -365,6 +382,8 @@ class Session:
                             )
 
                 self.history.add_tool_result(tc.id, tool_result)
+                if self.trace:
+                    self.trace.write_tool_result_step(tc.id, tool_result)
 
             # --- Context compaction ---
             if compact(self.history, self.tracker, self.client):
