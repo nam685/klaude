@@ -12,7 +12,6 @@ Operations:
 
 import os
 import subprocess
-import tempfile
 
 from klaude.tools.registry import Tool
 
@@ -22,7 +21,9 @@ def _run_git(*args: str, cwd: str | None = None) -> tuple[bool, str]:
     try:
         result = subprocess.run(
             ["git", *args],
-            capture_output=True, text=True, timeout=30,
+            capture_output=True,
+            text=True,
+            timeout=30,
             cwd=cwd or os.getcwd(),
         )
         output = (result.stdout + result.stderr).strip()
@@ -55,7 +56,9 @@ def handle_worktree(
         if not repo_root_ok:
             return f"Error: could not find repo root: {repo_root}"
 
-        wt_path = path or os.path.join(os.path.dirname(repo_root), f".klaude-worktree-{name}")
+        wt_path = path or os.path.join(
+            os.path.dirname(repo_root), f".klaude-worktree-{name}"
+        )
         branch_name = f"klaude/{name}"
         base = base_branch or "HEAD"
 
@@ -123,7 +126,9 @@ def handle_worktree(
         if not path and name:
             repo_root_ok, repo_root = _run_git("rev-parse", "--show-toplevel")
             if repo_root_ok:
-                path = os.path.join(os.path.dirname(repo_root), f".klaude-worktree-{name}")
+                path = os.path.join(
+                    os.path.dirname(repo_root), f".klaude-worktree-{name}"
+                )
 
         if not path:
             return "Error: could not determine worktree path"

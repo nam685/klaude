@@ -30,7 +30,11 @@ def handle_ask_user(question: str) -> str:
     console = _console or Console()
 
     console.print()
-    console.print(Panel(question, title="[bold yellow]Question[/bold yellow]", border_style="yellow"))
+    console.print(
+        Panel(
+            question, title="[bold yellow]Question[/bold yellow]", border_style="yellow"
+        )
+    )
 
     try:
         response = input("Your answer: ").strip()

@@ -25,6 +25,7 @@ from klaude.tools.sub_agent import handle_sub_agent
 @dataclass
 class BackgroundJob:
     """A background sub-agent job."""
+
     task_id: str
     prompt: str
     status: str = "running"  # running, completed, error
@@ -92,7 +93,9 @@ def handle_background_task(
             lines = ["Background tasks:\n"]
             for tid, job in _jobs.items():
                 elapsed = (job.finished_at or time.time()) - job.started_at
-                lines.append(f"  {tid}: {job.status} ({elapsed:.1f}s) — {job.prompt[:60]}")
+                lines.append(
+                    f"  {tid}: {job.status} ({elapsed:.1f}s) — {job.prompt[:60]}"
+                )
             return "\n".join(lines)
 
     if action == "result":

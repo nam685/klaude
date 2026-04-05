@@ -93,7 +93,9 @@ def list_sessions(session_dir: Path | None = None) -> list[dict[str, Any]]:
         return []
 
     result = []
-    for f in sorted(sessions_path.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True):
+    for f in sorted(
+        sessions_path.glob("*.json"), key=lambda p: p.stat().st_mtime, reverse=True
+    ):
         try:
             data = json.loads(f.read_text())
             steps = data.get("steps", [])
@@ -104,13 +106,15 @@ def list_sessions(session_dir: Path | None = None) -> list[dict[str, Any]]:
                 if s["source"] == "user":
                     summary = (s.get("message") or "")[:80]
                     break
-            result.append({
-                "id": data.get("session_id", f.stem),
-                "saved_at": steps[-1]["timestamp"] if steps else "",
-                "turn_count": turn_count,
-                "summary": summary,
-                "message_count": len(steps),
-            })
+            result.append(
+                {
+                    "id": data.get("session_id", f.stem),
+                    "saved_at": steps[-1]["timestamp"] if steps else "",
+                    "turn_count": turn_count,
+                    "summary": summary,
+                    "message_count": len(steps),
+                }
+            )
         except (json.JSONDecodeError, KeyError, OSError):
             continue
     return result

@@ -1,8 +1,6 @@
 """Tests for ATIF v1.4 trace writer."""
 
 import json
-from pathlib import Path
-from typing import Any
 
 from klaude.core.trace import TraceWriter
 
@@ -42,9 +40,16 @@ def test_write_agent_step_with_tool_calls(tmp_path):
     path = tmp_path / "s.json"
     tw = TraceWriter(path, model_name="test-model")
     tw.write_user_step("fix bug")
-    tw.write_agent_step(None, tool_calls=[
-        {"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": '{"path": "main.py"}'}},
-    ])
+    tw.write_agent_step(
+        None,
+        tool_calls=[
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "read_file", "arguments": '{"path": "main.py"}'},
+            },
+        ],
+    )
 
     data = json.loads(path.read_text())
     agent_step = data["steps"][1]
@@ -62,9 +67,16 @@ def test_write_tool_result_step(tmp_path):
     path = tmp_path / "s.json"
     tw = TraceWriter(path, model_name="test-model")
     tw.write_user_step("fix bug")
-    tw.write_agent_step(None, tool_calls=[
-        {"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": '{"path": "x.py"}'}},
-    ])
+    tw.write_agent_step(
+        None,
+        tool_calls=[
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "read_file", "arguments": '{"path": "x.py"}'},
+            },
+        ],
+    )
     tw.write_tool_result_step("call_1", "def main(): pass")
 
     data = json.loads(path.read_text())
@@ -98,9 +110,16 @@ def test_to_chat_messages_roundtrip(tmp_path):
     path = tmp_path / "s.json"
     tw = TraceWriter(path, model_name="test-model")
     tw.write_user_step("fix bug")
-    tw.write_agent_step(None, tool_calls=[
-        {"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": '{"path": "x.py"}'}},
-    ])
+    tw.write_agent_step(
+        None,
+        tool_calls=[
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "read_file", "arguments": '{"path": "x.py"}'},
+            },
+        ],
+    )
     tw.write_tool_result_step("call_1", "contents")
     tw.write_agent_step("Done!", tool_calls=None)
 

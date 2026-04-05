@@ -18,6 +18,7 @@ from dataclasses import dataclass, field
 @dataclass
 class CronJob:
     """A recurring scheduled job."""
+
     job_id: str
     interval_seconds: int
     prompt: str
@@ -131,7 +132,9 @@ def list_jobs() -> str:
         elif job.interval_seconds >= 60:
             interval = f"{job.interval_seconds // 60}m"
         runs = f"{job.run_count} runs"
-        lines.append(f"  {job.job_id}: [{status}] every {interval}, {runs} — {job.prompt[:60]}")
+        lines.append(
+            f"  {job.job_id}: [{status}] every {interval}, {runs} — {job.prompt[:60]}"
+        )
     return "\n".join(lines)
 
 

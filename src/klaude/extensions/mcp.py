@@ -18,7 +18,6 @@ See Note 31 in docs/07-implementation-notes.md.
 """
 
 import asyncio
-import json
 import threading
 from contextlib import AsyncExitStack
 
@@ -115,7 +114,9 @@ class MCPBridge:
 
         return tools
 
-    def _make_tool(self, server_name: str, mcp_tool: object, session: ClientSession) -> Tool:
+    def _make_tool(
+        self, server_name: str, mcp_tool: object, session: ClientSession
+    ) -> Tool:
         """Convert an MCP tool to our Tool format.
 
         The handler calls back into the MCP session via the background event loop.

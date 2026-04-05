@@ -1,7 +1,6 @@
 """Test session_store with ATIF format."""
 
 import json
-from pathlib import Path
 
 from klaude.core.session_store import save_session, load_session, list_sessions
 
@@ -14,8 +13,11 @@ def test_save_session_writes_atif(tmp_path):
         {"role": "assistant", "content": "hi there"},
     ]
     sid = save_session(
-        messages, turn_count=1, session_id="test-001",
-        session_dir=tmp_path, model_name="test-model",
+        messages,
+        turn_count=1,
+        session_id="test-001",
+        session_dir=tmp_path,
+        model_name="test-model",
     )
     assert sid == "test-001"
 
@@ -41,8 +43,11 @@ def test_load_session_reads_atif(tmp_path):
         {"role": "assistant", "content": "hi"},
     ]
     save_session(
-        messages, turn_count=1, session_id="load-test",
-        session_dir=tmp_path, model_name="test-model",
+        messages,
+        turn_count=1,
+        session_id="load-test",
+        session_dir=tmp_path,
+        model_name="test-model",
     )
     result = load_session(session_id="load-test", session_dir=tmp_path)
     assert result is not None
@@ -62,8 +67,11 @@ def test_list_sessions_reads_atif(tmp_path):
         {"role": "assistant", "content": "done"},
     ]
     save_session(
-        messages, turn_count=1, session_id="list-test",
-        session_dir=tmp_path, model_name="test-model",
+        messages,
+        turn_count=1,
+        session_id="list-test",
+        session_dir=tmp_path,
+        model_name="test-model",
     )
     sessions = list_sessions(session_dir=tmp_path)
     assert len(sessions) == 1

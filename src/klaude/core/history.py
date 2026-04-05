@@ -62,11 +62,13 @@ class MessageHistory:
 
     def add_tool_result(self, tool_call_id: str, content: str) -> None:
         """Add a tool result message."""
-        self._messages.append({
-            "role": "tool",
-            "tool_call_id": tool_call_id,
-            "content": content,
-        })
+        self._messages.append(
+            {
+                "role": "tool",
+                "tool_call_id": tool_call_id,
+                "content": content,
+            }
+        )
 
     def compactable_range(self, keep_recent: int = 6) -> tuple[int, int]:
         """Return (start, end) indices of messages safe to compact.
@@ -141,6 +143,9 @@ class MessageHistory:
                 names = [tc["function"]["name"] for tc in tool_calls]
                 lines.append(f"  [{i}] {role}: tool_calls={names}{marker}")
             else:
-                lines.append(f"  [{i}] {role}: {preview}...{marker}" if len(content or "") > 60
-                             else f"  [{i}] {role}: {preview}{marker}")
+                lines.append(
+                    f"  [{i}] {role}: {preview}...{marker}"
+                    if len(content or "") > 60
+                    else f"  [{i}] {role}: {preview}{marker}"
+                )
         return "\n".join(lines)

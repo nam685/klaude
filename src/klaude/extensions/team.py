@@ -18,16 +18,21 @@ See Note 35 in docs/07-implementation-notes.md for design rationale.
 """
 
 import threading
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from datetime import datetime
 
 from klaude.core.client import LLMClient
-from klaude.tools.registry import Tool, ToolRegistry
+from klaude.tools.registry import ToolRegistry
 from klaude.tools.read_file import tool as read_file_tool
 from klaude.tools.glob_search import tool as glob_tool
 from klaude.tools.grep_search import tool as grep_tool
 from klaude.tools.list_directory import tool as list_directory_tool
-from klaude.tools.git import git_status_tool, git_diff_tool, git_log_tool, git_commit_tool
+from klaude.tools.git import (
+    git_status_tool,
+    git_diff_tool,
+    git_log_tool,
+    git_commit_tool,
+)
 from klaude.tools.write_file import tool as write_file_tool
 from klaude.tools.edit_file import tool as edit_file_tool
 from klaude.tools.bash import tool as bash_tool
@@ -40,6 +45,7 @@ _MAX_MEMBER_ITERATIONS = 20
 @dataclass
 class AgentRole:
     """A team member definition — who they are and what they can do."""
+
     name: str
     description: str
     system_prompt: str = ""
@@ -49,6 +55,7 @@ class AgentRole:
 @dataclass
 class TeamMessage:
     """A message on the team's shared message board."""
+
     sender: str
     content: str
     recipient: str | None = None  # None = broadcast to all
@@ -73,9 +80,9 @@ class MessageBoard:
     def post(self, sender: str, content: str, recipient: str | None = None) -> None:
         """Post a message to the board."""
         with self._lock:
-            self._messages.append(TeamMessage(
-                sender=sender, content=content, recipient=recipient
-            ))
+            self._messages.append(
+                TeamMessage(sender=sender, content=content, recipient=recipient)
+            )
 
     def get_all(self) -> list[TeamMessage]:
         """Get all messages on the board."""
@@ -86,7 +93,8 @@ class MessageBoard:
         """Get messages visible to a specific agent (broadcasts + direct messages)."""
         with self._lock:
             return [
-                m for m in self._messages
+                m
+                for m in self._messages
                 if m.recipient is None or m.recipient == agent_name
             ]
 
@@ -160,7 +168,9 @@ def _build_member_system_prompt(
         "full": "full access (search, read, write, edit, run commands, git commit, web fetch)",
     }
     parts.append(f"\nYou have {access_desc.get(role.tool_access, 'read-only access')}.")
-    parts.append("\nBe thorough but concise. Complete your task and summarize your findings.")
+    parts.append(
+        "\nBe thorough but concise. Complete your task and summarize your findings."
+    )
 
     # Include message board context
     board_messages = board.get_for(role.name)
@@ -228,11 +238,13 @@ def run_agent(
         # Execute tool calls and feed results back
         for tc in msg.tool_calls:
             result = registry.execute(tc.function.name, tc.function.arguments)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": result,
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                }
+            )
 
     error = f"Error: {role.name} hit maximum iterations without completing."
     board.post(role.name, error)

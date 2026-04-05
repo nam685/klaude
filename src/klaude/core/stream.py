@@ -145,7 +145,12 @@ def consume_stream(
             # Stop spinner only for text content.  For tool-call-only
             # responses the spinner stays alive with a progress label,
             # eliminating the visual gap + blank lines before execution.
-            if delta.content and spinner and not _suppressing_tool_text and not _in_think_block:
+            if (
+                delta.content
+                and spinner
+                and not _suppressing_tool_text
+                and not _in_think_block
+            ):
                 spinner.stop()
                 spinner = None
 
@@ -236,8 +241,7 @@ def consume_stream(
                         # (ends with a prefix of "<function=" or "<tool_call>")
                         _lt = _print_pending.rfind("<")
                         if _lt >= 0 and any(
-                            m.startswith(_print_pending[_lt:])
-                            for m in _TOOL_MARKERS
+                            m.startswith(_print_pending[_lt:]) for m in _TOOL_MARKERS
                         ):
                             # Hold text from '<' onward, print everything before
                             if _lt > 0:
@@ -271,9 +275,7 @@ def consume_stream(
                 # Update spinner to show tool call progress
                 if spinner:
                     n = len(tool_calls_by_index)
-                    spinner.update(
-                        f"Calling {n} tool{'s' if n != 1 else ''}..."
-                    )
+                    spinner.update(f"Calling {n} tool{'s' if n != 1 else ''}...")
     except KeyboardInterrupt:
         # Ctrl+C during streaming — stop gracefully, return what we have so far.
         # We discard incomplete tool calls (they'd fail to execute anyway)

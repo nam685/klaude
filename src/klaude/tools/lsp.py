@@ -7,7 +7,6 @@ AST-based) and falls back to ctags-style grep for other languages.
 Zero new dependencies — jedi is optional (graceful fallback if missing).
 """
 
-import json
 import os
 import re
 import subprocess
@@ -17,6 +16,7 @@ from klaude.tools.registry import Tool
 # Try to import jedi for Python intelligence
 try:
     import jedi
+
     HAS_JEDI = True
 except ImportError:
     HAS_JEDI = False
@@ -29,12 +29,14 @@ def _jedi_definitions(path: str, line: int, column: int) -> list[dict[str, str]]
     results = []
     for d in defs:
         if d.module_path:
-            results.append({
-                "name": d.name,
-                "path": str(d.module_path),
-                "line": d.line,
-                "type": d.type,
-            })
+            results.append(
+                {
+                    "name": d.name,
+                    "path": str(d.module_path),
+                    "line": d.line,
+                    "type": d.type,
+                }
+            )
     return results
 
 
@@ -45,30 +47,34 @@ def _jedi_references(path: str, line: int, column: int) -> list[dict[str, str]]:
     results = []
     for r in refs:
         if r.module_path:
-            results.append({
-                "name": r.name,
-                "path": str(r.module_path),
-                "line": r.line,
-                "type": r.type,
-            })
+            results.append(
+                {
+                    "name": r.name,
+                    "path": str(r.module_path),
+                    "line": r.line,
+                    "type": r.type,
+                }
+            )
     return results
 
 
 def _jedi_diagnostics(path: str) -> list[dict[str, str]]:
     """Use jedi to get diagnostics (syntax errors, etc.) for a file."""
     script = jedi.Script(path=path)
-    errors = script.get_names(all_scopes=False, definitions=False)
+    script.get_names(all_scopes=False, definitions=False)
     # Jedi doesn't have a direct diagnostics API — use syntax check
     results = []
     try:
         compile(open(path).read(), path, "exec")
     except SyntaxError as e:
-        results.append({
-            "severity": "error",
-            "message": str(e.msg),
-            "line": e.lineno or 0,
-            "path": path,
-        })
+        results.append(
+            {
+                "severity": "error",
+                "message": str(e.msg),
+                "line": e.lineno or 0,
+                "path": path,
+            }
+        )
     return results
 
 
@@ -76,21 +82,34 @@ def _grep_definitions(symbol: str, directory: str) -> list[dict[str, str]]:
     """Fallback: grep for definition patterns across common languages."""
     patterns = [
         rf"(def|func|function|fn)\s+{re.escape(symbol)}\b",  # Python, Go, JS, Rust
-        rf"class\s+{re.escape(symbol)}\b",                    # class definitions
-        rf"(const|let|var|val)\s+{re.escape(symbol)}\b",      # variable declarations
-        rf"type\s+{re.escape(symbol)}\b",                     # type definitions
-        rf"interface\s+{re.escape(symbol)}\b",                 # interface definitions
+        rf"class\s+{re.escape(symbol)}\b",  # class definitions
+        rf"(const|let|var|val)\s+{re.escape(symbol)}\b",  # variable declarations
+        rf"type\s+{re.escape(symbol)}\b",  # type definitions
+        rf"interface\s+{re.escape(symbol)}\b",  # interface definitions
     ]
     combined = "|".join(f"({p})" for p in patterns)
 
     try:
         result = subprocess.run(
-            ["grep", "-rnE", combined, directory,
-             "--include=*.py", "--include=*.js", "--include=*.ts",
-             "--include=*.go", "--include=*.rs", "--include=*.java",
-             "--include=*.rb", "--include=*.c", "--include=*.cpp",
-             "--include=*.h"],
-            capture_output=True, text=True, timeout=10,
+            [
+                "grep",
+                "-rnE",
+                combined,
+                directory,
+                "--include=*.py",
+                "--include=*.js",
+                "--include=*.ts",
+                "--include=*.go",
+                "--include=*.rs",
+                "--include=*.java",
+                "--include=*.rb",
+                "--include=*.c",
+                "--include=*.cpp",
+                "--include=*.h",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return []
@@ -101,11 +120,13 @@ def _grep_definitions(symbol: str, directory: str) -> list[dict[str, str]]:
             continue
         match = re.match(r"^(.+?):(\d+):(.*)", line)
         if match:
-            results.append({
-                "path": match.group(1),
-                "line": int(match.group(2)),
-                "text": match.group(3).strip(),
-            })
+            results.append(
+                {
+                    "path": match.group(1),
+                    "line": int(match.group(2)),
+                    "text": match.group(3).strip(),
+                }
+            )
     return results
 
 
@@ -113,12 +134,25 @@ def _grep_references(symbol: str, directory: str) -> list[dict[str, str]]:
     """Fallback: grep for all usages of a symbol."""
     try:
         result = subprocess.run(
-            ["grep", "-rnw", symbol, directory,
-             "--include=*.py", "--include=*.js", "--include=*.ts",
-             "--include=*.go", "--include=*.rs", "--include=*.java",
-             "--include=*.rb", "--include=*.c", "--include=*.cpp",
-             "--include=*.h"],
-            capture_output=True, text=True, timeout=10,
+            [
+                "grep",
+                "-rnw",
+                symbol,
+                directory,
+                "--include=*.py",
+                "--include=*.js",
+                "--include=*.ts",
+                "--include=*.go",
+                "--include=*.rs",
+                "--include=*.java",
+                "--include=*.rb",
+                "--include=*.c",
+                "--include=*.cpp",
+                "--include=*.h",
+            ],
+            capture_output=True,
+            text=True,
+            timeout=10,
         )
     except (subprocess.TimeoutExpired, FileNotFoundError):
         return []
@@ -129,11 +163,13 @@ def _grep_references(symbol: str, directory: str) -> list[dict[str, str]]:
             continue
         match = re.match(r"^(.+?):(\d+):(.*)", line)
         if match:
-            results.append({
-                "path": match.group(1),
-                "line": int(match.group(2)),
-                "text": match.group(3).strip(),
-            })
+            results.append(
+                {
+                    "path": match.group(1),
+                    "line": int(match.group(2)),
+                    "text": match.group(3).strip(),
+                }
+            )
     return results
 
 
@@ -164,12 +200,14 @@ def handle_lsp(
                 try:
                     compile(open(path).read(), path, "exec")
                 except SyntaxError as e:
-                    results.append({
-                        "severity": "error",
-                        "message": str(e.msg),
-                        "line": e.lineno or 0,
-                        "path": path,
-                    })
+                    results.append(
+                        {
+                            "severity": "error",
+                            "message": str(e.msg),
+                            "line": e.lineno or 0,
+                            "path": path,
+                        }
+                    )
             if not results:
                 return f"No diagnostics for {path} (clean)"
             lines = [f"Diagnostics for {path}:\n"]

@@ -26,7 +26,9 @@ def _html_to_text(html: str) -> str:
     Good enough for documentation pages, READMEs, and API docs.
     """
     # Remove script and style blocks
-    text = re.sub(r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE)
+    text = re.sub(
+        r"<(script|style)[^>]*>.*?</\1>", "", html, flags=re.DOTALL | re.IGNORECASE
+    )
     # Replace block-level elements with newlines
     text = re.sub(r"<(br|p|div|h[1-6]|li|tr)[^>]*/?>", "\n", text, flags=re.IGNORECASE)
     # Strip all remaining tags
@@ -47,7 +49,9 @@ def handle_web_fetch(url: str) -> str:
 
     try:
         with httpx.Client(follow_redirects=True, timeout=TIMEOUT_SECONDS) as client:
-            response = client.get(url, headers={"User-Agent": "klaude/0.1 (AI coding assistant)"})
+            response = client.get(
+                url, headers={"User-Agent": "klaude/0.1 (AI coding assistant)"}
+            )
             response.raise_for_status()
 
             # Check size before reading full body
@@ -64,7 +68,10 @@ def handle_web_fetch(url: str) -> str:
 
             # Truncate if too long
             if len(body) > MAX_OUTPUT_CHARS:
-                body = body[:MAX_OUTPUT_CHARS] + f"\n\n[truncated — {len(response.text):,} chars total]"
+                body = (
+                    body[:MAX_OUTPUT_CHARS]
+                    + f"\n\n[truncated — {len(response.text):,} chars total]"
+                )
 
             return body or "(empty response)"
 

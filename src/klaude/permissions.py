@@ -27,8 +27,30 @@ from rich.syntax import Syntax
 
 # --- Tool classification ---
 
-SAFE_TOOLS = {"read_file", "glob", "grep", "list_directory", "git_status", "git_diff", "git_log", "task_list", "sub_agent", "web_fetch", "web_search", "ask_user", "lsp", "background_task"}
-DANGEROUS_TOOLS = {"bash", "write_file", "edit_file", "git_commit", "notebook_edit", "worktree"}
+SAFE_TOOLS = {
+    "read_file",
+    "glob",
+    "grep",
+    "list_directory",
+    "git_status",
+    "git_diff",
+    "git_log",
+    "task_list",
+    "sub_agent",
+    "web_fetch",
+    "web_search",
+    "ask_user",
+    "lsp",
+    "background_task",
+}
+DANGEROUS_TOOLS = {
+    "bash",
+    "write_file",
+    "edit_file",
+    "git_commit",
+    "notebook_edit",
+    "worktree",
+}
 
 # Tools blocked in plan mode (write/execute tools)
 PLAN_MODE_BLOCKED = {"bash", "write_file", "edit_file", "git_commit", "team_delegate"}
@@ -36,15 +58,15 @@ PLAN_MODE_BLOCKED = {"bash", "write_file", "edit_file", "git_commit", "team_dele
 # --- Command denylist (always blocked, even with user approval) ---
 
 DENIED_COMMANDS = [
-    re.compile(r"\brm\s+(-\w*f\w*\s+)*\s*/\s*$"),      # rm -rf /
-    re.compile(r"\brm\s+(-\w*f\w*\s+)*\s*/\w"),          # rm -rf /etc, /home, etc.
-    re.compile(r"\bsudo\b"),                               # any sudo
-    re.compile(r"\bchmod\s+777\b"),                        # chmod 777
-    re.compile(r"\bmkfs\b"),                               # format filesystem
-    re.compile(r"\bdd\s+.*of=/dev/"),                      # dd to device
-    re.compile(r">\s*/dev/sd[a-z]"),                       # write to raw device
-    re.compile(r"\bcurl\b.*\|\s*\bbash\b"),                # curl | bash (pipe to shell)
-    re.compile(r"\bwget\b.*\|\s*\bbash\b"),                # wget | bash
+    re.compile(r"\brm\s+(-\w*f\w*\s+)*\s*/\s*$"),  # rm -rf /
+    re.compile(r"\brm\s+(-\w*f\w*\s+)*\s*/\w"),  # rm -rf /etc, /home, etc.
+    re.compile(r"\bsudo\b"),  # any sudo
+    re.compile(r"\bchmod\s+777\b"),  # chmod 777
+    re.compile(r"\bmkfs\b"),  # format filesystem
+    re.compile(r"\bdd\s+.*of=/dev/"),  # dd to device
+    re.compile(r">\s*/dev/sd[a-z]"),  # write to raw device
+    re.compile(r"\bcurl\b.*\|\s*\bbash\b"),  # curl | bash (pipe to shell)
+    re.compile(r"\bwget\b.*\|\s*\bbash\b"),  # wget | bash
 ]
 
 # --- Path sandboxing ---
@@ -151,7 +173,9 @@ class PermissionManager:
 
         # --- Plan mode blocks ---
         if self.plan_mode and tool_name in PLAN_MODE_BLOCKED:
-            return f"Blocked: plan mode is active — {tool_name} is not allowed (read-only)"
+            return (
+                f"Blocked: plan mode is active — {tool_name} is not allowed (read-only)"
+            )
 
         # --- Bash denylist ---
         if tool_name == "bash":
@@ -188,7 +212,9 @@ class PermissionManager:
 
         # Show what's about to happen
         self.console.print()
-        self.console.print(f"  [bold yellow]Permission required:[/bold yellow] {tool_name}")
+        self.console.print(
+            f"  [bold yellow]Permission required:[/bold yellow] {tool_name}"
+        )
 
         if tool_name == "bash":
             command = args.get("command", "")

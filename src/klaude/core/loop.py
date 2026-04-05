@@ -47,7 +47,10 @@ from klaude.tools.git import (
     git_commit_tool,
 )
 from klaude.tools.task_list import tool as task_list_tool
-from klaude.tools.sub_agent import tool as sub_agent_tool, set_client as set_sub_agent_client
+from klaude.tools.sub_agent import (
+    tool as sub_agent_tool,
+    set_client as set_sub_agent_client,
+)
 from klaude.tools.team import (
     team_create_tool,
     team_delegate_tool,
@@ -56,7 +59,10 @@ from klaude.tools.team import (
 )
 from klaude.tools.web_fetch import tool as web_fetch_tool
 from klaude.tools.web_search import tool as web_search_tool
-from klaude.tools.ask_user import tool as ask_user_tool, set_console as set_ask_user_console
+from klaude.tools.ask_user import (
+    tool as ask_user_tool,
+    set_console as set_ask_user_console,
+)
 from klaude.tools.lsp import tool as lsp_tool
 from klaude.tools.notebook_edit import tool as notebook_edit_tool
 from klaude.tools.background_task import tool as background_task_tool
@@ -298,9 +304,7 @@ class Session:
                     )
                 return "Stopped: token budget exceeded."
 
-            self.status_bar.update(
-                self.tracker.format_compact(self.turn_count)
-            )
+            self.status_bar.update(self.tracker.format_compact(self.turn_count))
 
             # --- LLM call with error recovery ---
             try:
@@ -323,12 +327,11 @@ class Session:
                 self.history.add_assistant(result.to_message_dict())
                 if self.trace:
                     self.trace.write_agent_step(
-                        result.content, tool_calls=None,
+                        result.content,
+                        tool_calls=None,
                     )
                 self.tracker.update(self.history.messages)
-                self.status_bar.update(
-                    self.tracker.format_compact(self.turn_count)
-                )
+                self.status_bar.update(self.tracker.format_compact(self.turn_count))
                 if not self.quiet:
                     self.console.print()  # blank line after response
                 return result.content
@@ -394,9 +397,7 @@ class Session:
 
         # Hit MAX_ITERATIONS
         self.tracker.update(self.history.messages)
-        self.status_bar.update(
-            self.tracker.format_compact(self.turn_count)
-        )
+        self.status_bar.update(self.tracker.format_compact(self.turn_count))
         if not self.quiet:
             self.console.print("[red]Warning: hit maximum iterations, stopping.[/red]")
         return "Stopped: exceeded maximum iterations."

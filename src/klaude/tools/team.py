@@ -39,6 +39,7 @@ def _reset() -> None:
 
 # --- Tool 1: team_create ---
 
+
 def handle_team_create(
     team_name: str,
     members: list[dict],
@@ -123,6 +124,7 @@ team_create_tool = Tool(
 
 # --- Tool 2: team_delegate ---
 
+
 def handle_team_delegate(
     member_name: str,
     task: str,
@@ -178,6 +180,7 @@ team_delegate_tool = Tool(
 
 # --- Tool 3: team_message ---
 
+
 def handle_team_message(
     action: str,
     content: str = "",
@@ -194,7 +197,9 @@ def handle_team_message(
         if not content:
             return "Error: 'content' is required for action 'post'."
         _board.post(sender=from_name, content=content, recipient=to_name)
-        return f"Posted message from {from_name}" + (f" to {to_name}" if to_name else " (broadcast)")
+        return f"Posted message from {from_name}" + (
+            f" to {to_name}" if to_name else " (broadcast)"
+        )
 
     else:
         return f"Error: unknown action '{action}'. Must be 'read' or 'post'."

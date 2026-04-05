@@ -65,7 +65,9 @@ def _print_json_summary(
         return
     _json_printed = True
     if session is not None:
-        summary = _build_json_summary(session, session_id or "", session_path or "", error=error)
+        summary = _build_json_summary(
+            session, session_id or "", session_path or "", error=error
+        )
     else:
         summary = {
             "session_id": None,
@@ -92,6 +94,7 @@ def _save_and_summarize(
         session_path = str(session.trace.path.resolve())
         # Prune old sessions to keep directory bounded
         from klaude.core.session_store import _prune_old_sessions
+
         _prune_old_sessions(session.trace.path.parent)
 
     _print_json_summary(session, sid, session_path, error=error)
@@ -261,7 +264,11 @@ def main(
         _active_session = session
 
         # Set up session directory for ATIF trace files
-        _sd = Path(session_dir) if session_dir else Path(os.getcwd()) / ".klaude" / "sessions"
+        _sd = (
+            Path(session_dir)
+            if session_dir
+            else Path(os.getcwd()) / ".klaude" / "sessions"
+        )
         _sd.mkdir(parents=True, exist_ok=True)
 
         # --- Resume previous session ---
@@ -275,7 +282,9 @@ def main(
                 if session_dir_path:
                     resume_trace_path = session_dir_path / f"{sid}.json"
                 else:
-                    resume_trace_path = Path(os.getcwd()) / ".klaude" / "sessions" / f"{sid}.json"
+                    resume_trace_path = (
+                        Path(os.getcwd()) / ".klaude" / "sessions" / f"{sid}.json"
+                    )
                 if resume_trace_path.exists():
                     session.trace = TraceWriter.from_existing(resume_trace_path)
                 if not json_mode:
@@ -291,7 +300,9 @@ def main(
         # Create fresh trace writer if not resuming
         if session.trace is None:
             _trace_id = time.strftime("%Y%m%d-%H%M%S")
-            session.trace = TraceWriter(_sd / f"{_trace_id}.json", model_name=effective_model)
+            session.trace = TraceWriter(
+                _sd / f"{_trace_id}.json", model_name=effective_model
+            )
 
         if not task:
             # --- REPL mode (never --json, that case is handled above) ---

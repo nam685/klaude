@@ -81,7 +81,9 @@ def handle_notebook_edit(
 
         if cell_index is not None:
             if cell_index < 0 or cell_index >= len(cells):
-                return f"Error: cell_index {cell_index} out of range (0-{len(cells)-1})"
+                return (
+                    f"Error: cell_index {cell_index} out of range (0-{len(cells) - 1})"
+                )
             return _format_cell(cells[cell_index], cell_index)
 
         # Read all cells
@@ -107,7 +109,7 @@ def handle_notebook_edit(
 
         cells = nb.get("cells", [])
         if cell_index < 0 or cell_index >= len(cells):
-            return f"Error: cell_index {cell_index} out of range (0-{len(cells)-1})"
+            return f"Error: cell_index {cell_index} out of range (0-{len(cells) - 1})"
 
         # Update cell source (notebook format stores as list of lines)
         source_lines = [line + "\n" for line in content.split("\n")]
@@ -163,9 +165,18 @@ def handle_notebook_edit(
 
         try:
             result = subprocess.run(
-                ["jupyter", "nbconvert", "--to", "notebook",
-                 "--execute", "--inplace", path],
-                capture_output=True, text=True, timeout=120,
+                [
+                    "jupyter",
+                    "nbconvert",
+                    "--to",
+                    "notebook",
+                    "--execute",
+                    "--inplace",
+                    path,
+                ],
+                capture_output=True,
+                text=True,
+                timeout=120,
             )
             if result.returncode != 0:
                 return f"Error executing notebook:\n{result.stderr}"
@@ -183,7 +194,9 @@ def handle_notebook_edit(
         except subprocess.TimeoutExpired:
             return "Error: notebook execution timed out (120s)"
 
-    return f"Error: action must be 'read', 'edit', 'insert', or 'execute' (got '{action}')"
+    return (
+        f"Error: action must be 'read', 'edit', 'insert', or 'execute' (got '{action}')"
+    )
 
 
 tool = Tool(

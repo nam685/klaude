@@ -51,7 +51,9 @@ def handle_task_list(
         if not _tasks:
             return "Error: no task list exists. Use action 'create' first."
         if task_index < 0 or task_index >= len(_tasks):
-            return f"Error: task_index {task_index} is out of range (0–{len(_tasks) - 1})."
+            return (
+                f"Error: task_index {task_index} is out of range (0–{len(_tasks) - 1})."
+            )
         _tasks[task_index]["status"] = status
         return _render_tasks()
 
@@ -59,7 +61,9 @@ def handle_task_list(
         return _render_tasks()
 
     else:
-        return f"Error: unknown action '{action}'. Must be one of: create, update, list."
+        return (
+            f"Error: unknown action '{action}'. Must be one of: create, update, list."
+        )
 
 
 tool = Tool(

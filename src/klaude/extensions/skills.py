@@ -35,6 +35,7 @@ from pathlib import Path
 @dataclass
 class Skill:
     """A reusable prompt template."""
+
     name: str
     description: str
     body: str  # The prompt text (markdown after frontmatter)
@@ -118,7 +119,7 @@ def _parse_frontmatter(text: str) -> tuple[dict[str, str], str]:
 
     # Extract frontmatter lines
     fm_text = text[3:end].strip()
-    body = text[end + 3:].strip()
+    body = text[end + 3 :].strip()
 
     metadata: dict[str, str] = {}
     for line in fm_text.splitlines():

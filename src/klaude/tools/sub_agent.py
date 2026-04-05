@@ -90,11 +90,13 @@ def handle_sub_agent(task: str) -> str:
         # Execute tool calls and feed results back
         for tc in msg.tool_calls:
             result = registry.execute(tc.function.name, tc.function.arguments)
-            messages.append({
-                "role": "tool",
-                "tool_call_id": tc.id,
-                "content": result,
-            })
+            messages.append(
+                {
+                    "role": "tool",
+                    "tool_call_id": tc.id,
+                    "content": result,
+                }
+            )
 
     return "Error: sub-agent hit maximum iterations without completing."
 

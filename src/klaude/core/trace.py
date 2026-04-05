@@ -50,15 +50,19 @@ class TraceWriter:
 
     def write_user_step(self, message: str) -> None:
         """Add a user step and flush to disk."""
-        self._doc["steps"].append({
-            "step_id": self._next_step_id(),
-            "timestamp": self._timestamp(),
-            "source": "user",
-            "message": message,
-        })
+        self._doc["steps"].append(
+            {
+                "step_id": self._next_step_id(),
+                "timestamp": self._timestamp(),
+                "source": "user",
+                "message": message,
+            }
+        )
         self._flush()
 
-    def write_agent_step(self, content: str | None, tool_calls: list[dict] | None) -> None:
+    def write_agent_step(
+        self, content: str | None, tool_calls: list[dict] | None
+    ) -> None:
         """Add an agent step and flush to disk.
 
         Args:
@@ -74,23 +78,23 @@ class TraceWriter:
             "model_name": self._model_name,
         }
         if tool_calls is not None:
-            step["tool_calls"] = [
-                self._convert_tool_call(tc) for tc in tool_calls
-            ]
+            step["tool_calls"] = [self._convert_tool_call(tc) for tc in tool_calls]
         self._doc["steps"].append(step)
         self._flush()
 
     def write_tool_result_step(self, tool_call_id: str, content: str) -> None:
         """Add a system/observation step (tool result) and flush to disk."""
-        self._doc["steps"].append({
-            "step_id": self._next_step_id(),
-            "timestamp": self._timestamp(),
-            "source": "system",
-            "message": content,
-            "observation": {
-                "results": [{"tool_call_id": tool_call_id, "content": content}],
-            },
-        })
+        self._doc["steps"].append(
+            {
+                "step_id": self._next_step_id(),
+                "timestamp": self._timestamp(),
+                "source": "system",
+                "message": content,
+                "observation": {
+                    "results": [{"tool_call_id": tool_call_id, "content": content}],
+                },
+            }
+        )
         self._flush()
 
     @property
@@ -126,7 +130,10 @@ class TraceWriter:
             if source == "user":
                 messages.append({"role": "user", "content": step["message"]})
             elif source == "agent":
-                msg: dict[str, Any] = {"role": "assistant", "content": step.get("message")}
+                msg: dict[str, Any] = {
+                    "role": "assistant",
+                    "content": step.get("message"),
+                }
                 if step.get("tool_calls"):
                     msg["tool_calls"] = [
                         {
@@ -134,7 +141,9 @@ class TraceWriter:
                             "type": "function",
                             "function": {
                                 "name": tc["function_name"],
-                                "arguments": json.dumps(tc["arguments"]) if isinstance(tc["arguments"], dict) else tc["arguments"],
+                                "arguments": json.dumps(tc["arguments"])
+                                if isinstance(tc["arguments"], dict)
+                                else tc["arguments"],
                             },
                         }
                         for tc in step["tool_calls"]
@@ -144,11 +153,13 @@ class TraceWriter:
                 results = step.get("observation", {}).get("results", [])
                 if results:
                     for r in results:
-                        messages.append({
-                            "role": "tool",
-                            "tool_call_id": r["tool_call_id"],
-                            "content": r["content"],
-                        })
+                        messages.append(
+                            {
+                                "role": "tool",
+                                "tool_call_id": r["tool_call_id"],
+                                "content": r["content"],
+                            }
+                        )
                 else:
                     messages.append({"role": "user", "content": step["message"]})
         return messages
@@ -205,9 +216,7 @@ class TraceWriter:
     def _flush(self) -> None:
         """Rewrite the full JSON file atomically (write-to-temp + rename)."""
         self._path.parent.mkdir(parents=True, exist_ok=True)
-        fd, tmp = tempfile.mkstemp(
-            dir=self._path.parent, suffix=".tmp"
-        )
+        fd, tmp = tempfile.mkstemp(dir=self._path.parent, suffix=".tmp")
         try:
             with os.fdopen(fd, "w") as f:
                 json.dump(self._doc, f, indent=2)

@@ -50,6 +50,7 @@ CONFIG_FILE = ".klaude.toml"
 @dataclass
 class MCPServerConfig:
     """Configuration for a single MCP server."""
+
     name: str
     command: str
     args: list[str] = field(default_factory=list)
@@ -59,6 +60,7 @@ class MCPServerConfig:
 @dataclass
 class KlaudeConfig:
     """Resolved configuration for a klaude session."""
+
     # LLM settings
     model: str = "mlx-community/Qwen3-Coder-30B-A3B-Instruct-8bit"
     base_url: str = "http://localhost:8080/v1"
@@ -115,12 +117,14 @@ def _parse_mcp_servers(mcp_section: dict) -> list[MCPServerConfig]:
         env = {}
         for k, v in cfg.get("env", {}).items():
             env[k] = _resolve_env_value(str(v))
-        result.append(MCPServerConfig(
-            name=name,
-            command=cfg.get("command", ""),
-            args=cfg.get("args", []),
-            env=env,
-        ))
+        result.append(
+            MCPServerConfig(
+                name=name,
+                command=cfg.get("command", ""),
+                args=cfg.get("args", []),
+                env=env,
+            )
+        )
     return result
 
 

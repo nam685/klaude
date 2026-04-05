@@ -98,9 +98,9 @@ class StreamPrinter:
 
     def __init__(self, console: Console) -> None:
         self.console = console
-        self._buffer = ""          # accumulates partial lines
-        self._in_code = False      # inside a code fence?
-        self._code_lang = ""       # language of current code block
+        self._buffer = ""  # accumulates partial lines
+        self._in_code = False  # inside a code fence?
+        self._code_lang = ""  # language of current code block
         self._code_lines: list[str] = []  # accumulated code lines
 
     def feed(self, text: str) -> None:

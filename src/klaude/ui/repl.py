@@ -27,7 +27,6 @@ Slash commands:
     /<name>       — run a skill (e.g., /commit, /review, /explain)
 """
 
-import os
 import readline
 from pathlib import Path
 
@@ -79,7 +78,11 @@ def _read_input(console: Console, session: Session | None = None) -> str | None:
     Returns the input string, or None if the user wants to exit.
     """
     try:
-        prompt = "klaude[plan]> " if session and session.permissions.plan_mode else "klaude> "
+        prompt = (
+            "klaude[plan]> "
+            if session and session.permissions.plan_mode
+            else "klaude> "
+        )
         line = input(prompt)
         return line
     except EOFError:
@@ -92,7 +95,9 @@ def _read_input(console: Console, session: Session | None = None) -> str | None:
         return ""
 
 
-def _handle_slash_command(command: str, session: Session, console: Console) -> bool | str:
+def _handle_slash_command(
+    command: str, session: Session, console: Console
+) -> bool | str:
     """Handle a slash command.
 
     Returns:
@@ -149,7 +154,9 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
 
     if cmd == "/plan":
         session.permissions.plan_mode = not session.permissions.plan_mode
-        state = "ON (read-only)" if session.permissions.plan_mode else "OFF (full access)"
+        state = (
+            "ON (read-only)" if session.permissions.plan_mode else "OFF (full access)"
+        )
         color = "yellow" if session.permissions.plan_mode else "green"
         console.print(f"[{color}]Plan mode: {state}[/{color}]")
         return True
@@ -173,7 +180,9 @@ def _handle_slash_command(command: str, session: Session, console: Console) -> b
         # /cron <interval> <prompt>
         cron_parts = cmd_args.split(None, 1)
         if len(cron_parts) < 2:
-            console.print("[yellow]Usage: /cron <interval> <prompt>  (e.g., /cron 5m /review)[/yellow]")
+            console.print(
+                "[yellow]Usage: /cron <interval> <prompt>  (e.g., /cron 5m /review)[/yellow]"
+            )
             return True
         interval, prompt = cron_parts
         msg = create_job(interval, prompt)
@@ -231,7 +240,9 @@ def repl(session: Session) -> None:
     def _cron_turn(prompt: str) -> None:
         """Run a prompt through the session (called by cron timer thread)."""
         try:
-            console.print(f"\n[dim italic]  (cron job running: {prompt[:60]})[/dim italic]")
+            console.print(
+                f"\n[dim italic]  (cron job running: {prompt[:60]})[/dim italic]"
+            )
             session.turn(prompt)
         except Exception:
             pass  # don't crash the cron thread

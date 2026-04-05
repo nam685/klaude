@@ -17,23 +17,47 @@ Tools are organized into tiers for dynamic loading:
 """
 
 import json
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from typing import Any, Callable
 
 # Tool tier definitions — which tools belong to which tier
-CORE_TOOLS = frozenset({
-    "read_file", "write_file", "edit_file", "bash", "glob", "grep",
-    "list_directory", "task_list", "ask_user", "web_search",
-})
+CORE_TOOLS = frozenset(
+    {
+        "read_file",
+        "write_file",
+        "edit_file",
+        "bash",
+        "glob",
+        "grep",
+        "list_directory",
+        "task_list",
+        "ask_user",
+        "web_search",
+    }
+)
 
-GIT_TOOLS = frozenset({
-    "git_status", "git_diff", "git_log", "git_commit",
-})
+GIT_TOOLS = frozenset(
+    {
+        "git_status",
+        "git_diff",
+        "git_log",
+        "git_commit",
+    }
+)
 
-EXTENDED_TOOLS = frozenset({
-    "sub_agent", "web_fetch", "lsp", "notebook_edit",
-    "background_task", "worktree", "team_create", "team_delegate", "team_message",
-})
+EXTENDED_TOOLS = frozenset(
+    {
+        "sub_agent",
+        "web_fetch",
+        "lsp",
+        "notebook_edit",
+        "background_task",
+        "worktree",
+        "team_create",
+        "team_delegate",
+        "team_message",
+    }
+)
 
 
 @dataclass

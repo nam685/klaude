@@ -52,9 +52,7 @@ _JSON_TOOL_CALL_RE = re.compile(
 )
 
 
-def _parse_xml_tool_call(
-    func_name: str, body: str
-) -> ToolCallAccumulator:
+def _parse_xml_tool_call(func_name: str, body: str) -> ToolCallAccumulator:
     """Parse a single <function=NAME>BODY</function> into a ToolCallAccumulator."""
     params: dict[str, str] = {}
     for m in _PARAMETER_RE.finditer(body):

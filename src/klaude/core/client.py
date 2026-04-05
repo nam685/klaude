@@ -8,7 +8,13 @@ import time
 from collections.abc import Callable
 
 import httpx
-from openai import APIConnectionError, APITimeoutError, InternalServerError, OpenAI, Stream
+from openai import (
+    APIConnectionError,
+    APITimeoutError,
+    InternalServerError,
+    OpenAI,
+    Stream,
+)
 from openai.types.chat import (
     ChatCompletion,
     ChatCompletionChunk,
@@ -52,7 +58,9 @@ class LLMClient:
         # Without this, httpx tries to route localhost through a SOCKS proxy.
         transport = httpx.HTTPTransport()
         http_client = httpx.Client(transport=transport)
-        self.client = OpenAI(base_url=base_url, api_key=api_key, http_client=http_client)
+        self.client = OpenAI(
+            base_url=base_url, api_key=api_key, http_client=http_client
+        )
 
     def chat(
         self,
@@ -156,6 +164,6 @@ class LLMClient:
             except RETRYABLE_EXCEPTIONS as e:
                 last_error = e
                 if attempt < MAX_RETRIES - 1:
-                    delay = RETRY_BASE_DELAY * (2 ** attempt)
+                    delay = RETRY_BASE_DELAY * (2**attempt)
                     time.sleep(delay)
         raise last_error  # type: ignore[misc]

@@ -82,13 +82,13 @@ class StatusBar:
         display = self._text[:cols].ljust(cols)
         # Save cursor -> last row -> clear -> dim text -> restore cursor
         sys.stdout.write(
-            f"\0337"            # save cursor position
-            f"\033[{rows};1H"   # move to last row
-            f"\033[2K"          # clear the line
-            f"\033[2m"          # dim
+            f"\0337"  # save cursor position
+            f"\033[{rows};1H"  # move to last row
+            f"\033[2K"  # clear the line
+            f"\033[2m"  # dim
             f"{display}"
-            f"\033[0m"          # reset attributes
-            f"\0338"            # restore cursor position
+            f"\033[0m"  # reset attributes
+            f"\0338"  # restore cursor position
         )
         sys.stdout.flush()
 
@@ -120,10 +120,10 @@ class StatusBar:
             return
         # Clear status line and restore full scroll region
         sys.stdout.write(
-            f"\033[{rows};1H"   # move to last row
-            f"\033[2K"          # clear it
-            f"\033[1;{rows}r"   # restore full scroll region
-            f"\033[{rows};1H"   # cursor at bottom
+            f"\033[{rows};1H"  # move to last row
+            f"\033[2K"  # clear it
+            f"\033[1;{rows}r"  # restore full scroll region
+            f"\033[{rows};1H"  # cursor at bottom
         )
         sys.stdout.flush()
         # Restore previous SIGWINCH handler

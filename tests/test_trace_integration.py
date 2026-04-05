@@ -1,7 +1,6 @@
 """Integration test: a simulated turn writes correct ATIF trace."""
 
 import json
-from pathlib import Path
 
 from klaude.core.trace import TraceWriter
 
@@ -15,15 +14,24 @@ def test_full_turn_trace(tmp_path):
     tw.write_user_step("read main.py and explain it")
 
     # Agent responds with a tool call
-    tw.write_agent_step(None, tool_calls=[
-        {"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": '{"path": "main.py"}'}},
-    ])
+    tw.write_agent_step(
+        None,
+        tool_calls=[
+            {
+                "id": "call_1",
+                "type": "function",
+                "function": {"name": "read_file", "arguments": '{"path": "main.py"}'},
+            },
+        ],
+    )
 
     # Tool result
     tw.write_tool_result_step("call_1", "def main():\n    print('hello')")
 
     # Agent responds with text
-    tw.write_agent_step("This is a simple Python script that prints 'hello'.", tool_calls=None)
+    tw.write_agent_step(
+        "This is a simple Python script that prints 'hello'.", tool_calls=None
+    )
 
     # Finalize
     tw.finalize()

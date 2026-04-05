@@ -1,6 +1,5 @@
 """Test Session quiet mode and tool call counter."""
 
-from unittest.mock import MagicMock
 from klaude.core.loop import Session
 
 

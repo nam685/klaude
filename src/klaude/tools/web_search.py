@@ -62,7 +62,11 @@ def _extract_results(html: str) -> list[dict[str, str]]:
 
         for i, (url, title_html) in enumerate(links[:MAX_RESULTS]):
             title = _strip_tags(title_html).strip()
-            snippet = _strip_tags(snippets[i][0] if i < len(snippets) else "").strip() if snippets else ""
+            snippet = (
+                _strip_tags(snippets[i][0] if i < len(snippets) else "").strip()
+                if snippets
+                else ""
+            )
             if title and url.startswith("http"):
                 results.append({"title": title, "url": url, "snippet": snippet})
 
