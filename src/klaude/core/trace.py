@@ -93,6 +93,16 @@ class TraceWriter:
         })
         self._flush()
 
+    @property
+    def session_id(self) -> str:
+        """The session ID (derived from the file stem)."""
+        return self._doc.get("session_id", "")
+
+    @property
+    def path(self) -> Path:
+        """Path to the trace file on disk."""
+        return self._path
+
     def finalize(self) -> None:
         """Write final_metrics and flush. Called on session exit."""
         self._doc["final_metrics"] = {

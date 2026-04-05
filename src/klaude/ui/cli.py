@@ -15,6 +15,8 @@ import json
 import os
 import signal
 import sys
+import time
+from pathlib import Path
 
 import click
 from rich.console import Console
@@ -86,8 +88,11 @@ def _save_and_summarize(
 
     if session.turn_count > 0 and session.trace:
         session.trace.finalize()
-        sid = session.trace._doc.get("session_id")
-        session_path = str(session.trace._path.resolve())
+        sid = session.trace.session_id
+        session_path = str(session.trace.path.resolve())
+        # Prune old sessions to keep directory bounded
+        from klaude.core.session_store import _prune_old_sessions
+        _prune_old_sessions(session.trace.path.parent)
 
     _print_json_summary(session, sid, session_path, error=error)
 
@@ -256,13 +261,11 @@ def main(
         _active_session = session
 
         # Set up session directory for ATIF trace files
-        from pathlib import Path as _Path
-        _sd = _Path(session_dir) if session_dir else _Path(os.getcwd()) / ".klaude" / "sessions"
+        _sd = Path(session_dir) if session_dir else Path(os.getcwd()) / ".klaude" / "sessions"
         _sd.mkdir(parents=True, exist_ok=True)
 
         # --- Resume previous session ---
         if continue_session or resume_id:
-            from pathlib import Path
             session_dir_path = Path(session_dir) if session_dir else None
             saved = load_session(resume_id, session_dir=session_dir_path)
             if saved:
@@ -287,8 +290,7 @@ def main(
 
         # Create fresh trace writer if not resuming
         if session.trace is None:
-            import time as _time
-            _trace_id = _time.strftime("%Y%m%d-%H%M%S")
+            _trace_id = time.strftime("%Y%m%d-%H%M%S")
             session.trace = TraceWriter(_sd / f"{_trace_id}.json", model_name=effective_model)
 
         if not task:
