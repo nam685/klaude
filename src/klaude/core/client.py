@@ -50,9 +50,12 @@ class LLMClient:
         self.model = model
         self.base_url = base_url
         # Disable Qwen3 thinking by default for faster responses.
-        # mlx-lm passes chat_template_kwargs through to the Jinja template.
+        # chat_template_kwargs is mlx-lm specific — only send to local servers.
+        _is_local = "localhost" in base_url or "127.0.0.1" in base_url
         self.extra_body: dict | None = (
-            None if thinking else {"chat_template_kwargs": {"enable_thinking": False}}
+            {"chat_template_kwargs": {"enable_thinking": False}}
+            if (not thinking and _is_local)
+            else None
         )
         # Explicit httpx client that bypasses proxy env vars (ALL_PROXY, etc.).
         # Without this, httpx tries to route localhost through a SOCKS proxy.

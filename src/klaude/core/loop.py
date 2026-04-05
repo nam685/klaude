@@ -317,6 +317,10 @@ class Session:
                         f"\n[red]LLM API error (after retries): {e}[/red]"
                     )
                 return f"Stopped: LLM API error — {e}"
+            except Exception as e:
+                if not self.quiet:
+                    self.console.print(f"\n[red]LLM error: {e}[/red]")
+                return f"Stopped: LLM error — {e}"
 
             # consume_stream prints text tokens as they arrive and
             # accumulates tool call fragments into complete tool calls

@@ -92,8 +92,11 @@ def find_config_file(start_dir: str | None = None) -> Path | None:
     current = Path(start_dir or os.getcwd()).resolve()
     while True:
         candidate = current / CONFIG_FILE
-        if candidate.is_file():
-            return candidate
+        try:
+            if candidate.is_file():
+                return candidate
+        except PermissionError:
+            pass
         parent = current.parent
         if parent == current:
             break
