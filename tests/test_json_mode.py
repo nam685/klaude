@@ -13,12 +13,14 @@ def test_json_mode_no_task_errors():
     assert result.exit_code != 0
     # Should print full JSON schema to stdout
     output = result.output.strip()
-    if output:
-        data = json.loads(output)
-        assert "error" in data
-        assert data["error"] == "--json requires a task argument"
-        assert "session_id" in data
-        assert "session_path" in data
+    assert output, "Expected JSON output on stdout"
+    data = json.loads(output)
+    assert data["error"] == "--json requires a task argument"
+    assert "session_id" in data
+    assert "session_path" in data
+    assert "turn_count" in data
+    assert "token_count" in data
+    assert "tool_calls" in data
 
 
 def test_json_flag_implies_auto_approve():

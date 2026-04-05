@@ -108,7 +108,7 @@ def _sigterm_handler(signum: int, frame: object) -> None:
             _print_json_summary(error="SIGTERM")
     except Exception:
         pass
-    sys.exit(0)
+    sys.exit(1)
 
 
 @click.command()
@@ -263,7 +263,9 @@ def main(
 
         # --- Resume previous session ---
         if continue_session or resume_id:
-            saved = load_session(resume_id)
+            from pathlib import Path
+            session_dir_path = Path(session_dir) if session_dir else None
+            saved = load_session(resume_id, session_dir=session_dir_path)
             if saved:
                 messages, turns, saved_at, sid = saved
                 session.restore(messages, turns)
@@ -315,9 +317,7 @@ def main(
                 _active_session = None
                 _save_and_summarize(session, error=error)
 
-            if error and not json_mode:
-                raise SystemExit(1)
-            elif error and json_mode:
+            if error:
                 raise SystemExit(1)
 
     except SystemExit:
