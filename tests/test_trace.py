@@ -157,3 +157,33 @@ def test_from_existing_continues_step_counter(tmp_path):
     assert data["steps"][2]["source"] == "user"
     assert data["steps"][2]["message"] == "second task"
     assert data["agent"]["model_name"] == "test-model"  # preserved
+
+
+def test_flush_is_atomic_valid_json_at_all_times(tmp_path):
+    """The trace file is always valid JSON — never a partial write."""
+    path = tmp_path / "s.json"
+    tw = TraceWriter(path, model_name="test-model")
+
+    # After each write, the file should be valid JSON
+    tw.write_user_step("step 1")
+    data = json.loads(path.read_text())
+    assert len(data["steps"]) == 1
+
+    tw.write_agent_step("response", tool_calls=None)
+    data = json.loads(path.read_text())
+    assert len(data["steps"]) == 2
+
+    tw.write_user_step("step 2")
+    data = json.loads(path.read_text())
+    assert len(data["steps"]) == 3
+
+
+def test_no_temp_files_left_after_flush(tmp_path):
+    """Atomic flush does not leave .tmp files behind."""
+    path = tmp_path / "s.json"
+    tw = TraceWriter(path, model_name="test-model")
+    tw.write_user_step("hello")
+    tw.write_agent_step("hi", tool_calls=None)
+
+    remaining = list(tmp_path.glob("*.tmp"))
+    assert remaining == []
