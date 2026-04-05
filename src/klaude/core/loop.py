@@ -312,15 +312,19 @@ class Session:
                     self.history.messages, tools=self.tool_schemas
                 )
             except (APIConnectionError, APITimeoutError, InternalServerError) as e:
+                error_msg = f"Stopped: LLM API error — {e}"
                 if not self.quiet:
-                    self.console.print(
-                        f"\n[red]LLM API error (after retries): {e}[/red]"
-                    )
-                return f"Stopped: LLM API error — {e}"
+                    self.console.print(f"\n[red]{error_msg}[/red]")
+                if self.trace:
+                    self.trace.write_agent_step(error_msg, tool_calls=None)
+                raise RuntimeError(error_msg) from e
             except Exception as e:
+                error_msg = f"Stopped: LLM error — {e}"
                 if not self.quiet:
-                    self.console.print(f"\n[red]LLM error: {e}[/red]")
-                return f"Stopped: LLM error — {e}"
+                    self.console.print(f"\n[red]{error_msg}[/red]")
+                if self.trace:
+                    self.trace.write_agent_step(error_msg, tool_calls=None)
+                raise RuntimeError(error_msg) from e
 
             # consume_stream prints text tokens as they arrive and
             # accumulates tool call fragments into complete tool calls
