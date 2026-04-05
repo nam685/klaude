@@ -30,3 +30,6 @@ models/
 
 # Temp files
 tmp/
+
+# Environment variables
+.env
