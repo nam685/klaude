@@ -104,6 +104,80 @@ class TraceWriter:
         }
         self._flush()
 
+    def to_chat_messages(self) -> list[dict[str, Any]]:
+        """Convert ATIF steps to OpenAI chat message format.
+
+        Used by session resume to reconstruct the message history
+        the LLM expects.
+        """
+        messages: list[dict[str, Any]] = []
+        for step in self._doc["steps"]:
+            source = step["source"]
+            if source == "user":
+                messages.append({"role": "user", "content": step["message"]})
+            elif source == "agent":
+                msg: dict[str, Any] = {"role": "assistant", "content": step.get("message")}
+                if step.get("tool_calls"):
+                    msg["tool_calls"] = [
+                        {
+                            "id": tc["tool_call_id"],
+                            "type": "function",
+                            "function": {
+                                "name": tc["function_name"],
+                                "arguments": json.dumps(tc["arguments"]) if isinstance(tc["arguments"], dict) else tc["arguments"],
+                            },
+                        }
+                        for tc in step["tool_calls"]
+                    ]
+                messages.append(msg)
+            elif source == "system":
+                results = step.get("observation", {}).get("results", [])
+                if results:
+                    for r in results:
+                        messages.append({
+                            "role": "tool",
+                            "tool_call_id": r["tool_call_id"],
+                            "content": r["content"],
+                        })
+                else:
+                    messages.append({"role": "user", "content": step["message"]})
+        return messages
+
+    @classmethod
+    def load(cls, path: Path) -> tuple[list[dict[str, Any]], int]:
+        """Load an ATIF file and return (chat_messages, turn_count).
+
+        Used by session resume to reconstruct the conversation.
+        turn_count = number of user steps in the trajectory.
+        """
+        data = json.loads(path.read_text())
+        tw = cls.__new__(cls)
+        tw._path = path
+        tw._model_name = data.get("agent", {}).get("model_name", "")
+        tw._doc = data
+        tw._step_counter = len(data.get("steps", []))
+
+        turn_count = sum(1 for s in data.get("steps", []) if s["source"] == "user")
+        return tw.to_chat_messages(), turn_count
+
+    @classmethod
+    def from_existing(cls, path: Path) -> "TraceWriter":
+        """Load an existing ATIF file and resume appending steps.
+
+        Used when resuming a session (klaude -c). Preserves existing
+        steps and continues the step counter.
+        """
+        data = json.loads(path.read_text())
+        tw = cls.__new__(cls)
+        tw._path = path
+        tw._model_name = data.get("agent", {}).get("model_name", "")
+        tw._doc = data
+        tw._step_counter = max(
+            (s["step_id"] for s in data.get("steps", [])),
+            default=0,
+        )
+        return tw
+
     @staticmethod
     def _convert_tool_call(tc: dict) -> dict:
         """Convert OpenAI tool call format to ATIF format."""

@@ -2,6 +2,7 @@
 
 import json
 from pathlib import Path
+from typing import Any
 
 from klaude.core.trace import TraceWriter
 
@@ -90,3 +91,69 @@ def test_finalize_writes_final_metrics(tmp_path):
     assert fm["total_prompt_tokens"] == 0
     assert fm["total_completion_tokens"] == 0
     assert fm["total_cached_tokens"] == 0
+
+
+def test_to_chat_messages_roundtrip(tmp_path):
+    """ATIF steps convert back to OpenAI chat messages."""
+    path = tmp_path / "s.json"
+    tw = TraceWriter(path, model_name="test-model")
+    tw.write_user_step("fix bug")
+    tw.write_agent_step(None, tool_calls=[
+        {"id": "call_1", "type": "function", "function": {"name": "read_file", "arguments": '{"path": "x.py"}'}},
+    ])
+    tw.write_tool_result_step("call_1", "contents")
+    tw.write_agent_step("Done!", tool_calls=None)
+
+    msgs = tw.to_chat_messages()
+    assert len(msgs) == 4
+
+    assert msgs[0] == {"role": "user", "content": "fix bug"}
+
+    assert msgs[1]["role"] == "assistant"
+    assert msgs[1]["content"] is None
+    assert len(msgs[1]["tool_calls"]) == 1
+    assert msgs[1]["tool_calls"][0]["id"] == "call_1"
+    assert msgs[1]["tool_calls"][0]["type"] == "function"
+    assert msgs[1]["tool_calls"][0]["function"]["name"] == "read_file"
+    assert msgs[1]["tool_calls"][0]["function"]["arguments"] == '{"path": "x.py"}'
+
+    assert msgs[2] == {"role": "tool", "tool_call_id": "call_1", "content": "contents"}
+
+    assert msgs[3] == {"role": "assistant", "content": "Done!"}
+
+
+def test_load_returns_chat_messages_and_turn_count(tmp_path):
+    """load() reads an ATIF file and returns chat messages + turn count."""
+    path = tmp_path / "s.json"
+    tw = TraceWriter(path, model_name="test-model")
+    tw.write_user_step("first task")
+    tw.write_agent_step("done", tool_calls=None)
+    tw.write_user_step("second task")
+    tw.write_agent_step("also done", tool_calls=None)
+    tw.finalize()
+
+    msgs, turn_count = TraceWriter.load(path)
+    assert turn_count == 2  # two user steps = two turns
+    assert len(msgs) == 4
+    assert msgs[0]["content"] == "first task"
+    assert msgs[3]["content"] == "also done"
+
+
+def test_from_existing_continues_step_counter(tmp_path):
+    """from_existing() loads an ATIF file and continues appending steps."""
+    path = tmp_path / "s.json"
+    tw = TraceWriter(path, model_name="test-model")
+    tw.write_user_step("first task")
+    tw.write_agent_step("done", tool_calls=None)
+
+    # Simulate new session picking up the trace
+    tw2 = TraceWriter.from_existing(path)
+    tw2.write_user_step("second task")
+    tw2.write_agent_step("also done", tool_calls=None)
+
+    data = json.loads(path.read_text())
+    assert len(data["steps"]) == 4
+    assert data["steps"][2]["step_id"] == 3  # continues from 2
+    assert data["steps"][2]["source"] == "user"
+    assert data["steps"][2]["message"] == "second task"
+    assert data["agent"]["model_name"] == "test-model"  # preserved
