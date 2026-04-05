@@ -49,9 +49,16 @@ class LLMClient:
     ):
         self.model = model
         self.base_url = base_url
+        # Fail fast if remote API has no real API key
+        _is_local = "localhost" in base_url or "127.0.0.1" in base_url
+        if not _is_local and api_key in ("not-needed", ""):
+            raise ValueError(
+                f"API key required for remote server {base_url}. "
+                f"Set api_key or api_key_env in .klaude.toml, "
+                f"or export the env var."
+            )
         # Disable Qwen3 thinking by default for faster responses.
         # chat_template_kwargs is mlx-lm specific — only send to local servers.
-        _is_local = "localhost" in base_url or "127.0.0.1" in base_url
         self.extra_body: dict | None = (
             {"chat_template_kwargs": {"enable_thinking": False}}
             if (not thinking and _is_local)
