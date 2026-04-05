@@ -37,8 +37,11 @@ def find_memory_file(start_dir: str | None = None) -> Path | None:
 
     while True:
         candidate = current / MEMORY_FILE
-        if candidate.is_file():
-            return candidate
+        try:
+            if candidate.is_file():
+                return candidate
+        except PermissionError:
+            pass
         parent = current.parent
         if parent == current:
             break
