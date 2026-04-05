@@ -29,8 +29,9 @@ atexit.register(_cleanup)
 class StatusBar:
     """Persistent status line at the bottom of the terminal."""
 
-    def __init__(self) -> None:
+    def __init__(self, quiet: bool = False) -> None:
         self._active = False
+        self._quiet = quiet
         self._text = ""
         self._prev_sigwinch: object = None
 
@@ -41,7 +42,7 @@ class StatusBar:
     def start(self) -> None:
         """Reserve the bottom line by setting a scroll region."""
         global _active_bar
-        if not sys.stdout.isatty():
+        if self._quiet or not sys.stdout.isatty():
             return
         self._active = True
         _active_bar = self
