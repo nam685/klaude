@@ -46,7 +46,7 @@ class TraceWriter:
         return self._step_counter
 
     def _timestamp(self) -> str:
-        return time.strftime("%Y-%m-%dT%H:%M:%S")
+        return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
 
     def write_user_step(self, message: str) -> None:
         """Add a user step and flush to disk."""
@@ -73,7 +73,7 @@ class TraceWriter:
             "message": content,
             "model_name": self._model_name,
         }
-        if tool_calls:
+        if tool_calls is not None:
             step["tool_calls"] = [
                 self._convert_tool_call(tc) for tc in tool_calls
             ]
