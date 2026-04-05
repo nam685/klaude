@@ -22,7 +22,8 @@ from rich.console import Console
 from klaude.config import load_config
 from klaude.core.client import LLMClient
 from klaude.core.loop import Session
-from klaude.core.session_store import load_session, save_session
+from klaude.core.session_store import load_session
+from klaude.core.trace import TraceWriter
 
 console = Console()
 
@@ -79,25 +80,14 @@ def _save_and_summarize(
     session: Session,
     error: str | None = None,
 ) -> None:
-    """Save session and print JSON summary if in --json mode."""
-    from pathlib import Path
-
-    session_dir = Path(_session_dir_override) if _session_dir_override else None
+    """Finalize trace and print JSON summary if in --json mode."""
     sid = None
     session_path = None
 
-    if session.turn_count > 0:
-        sid = save_session(
-            session.history.messages,
-            session.turn_count,
-            session_dir=session_dir,
-        )
-        if session_dir:
-            session_path = str((session_dir / f"{sid}.json").resolve())
-        else:
-            session_path = str(
-                (Path(os.getcwd()) / ".klaude" / "sessions" / f"{sid}.json").resolve()
-            )
+    if session.turn_count > 0 and session.trace:
+        session.trace.finalize()
+        sid = session.trace._doc.get("session_id")
+        session_path = str(session.trace._path.resolve())
 
     _print_json_summary(session, sid, session_path, error=error)
 
@@ -261,8 +251,14 @@ def main(
             max_tokens=effective_max_tokens,
             config=cfg,
             quiet=json_mode,
+            model_name=effective_model,
         )
         _active_session = session
+
+        # Set up session directory for ATIF trace files
+        from pathlib import Path as _Path
+        _sd = _Path(session_dir) if session_dir else _Path(os.getcwd()) / ".klaude" / "sessions"
+        _sd.mkdir(parents=True, exist_ok=True)
 
         # --- Resume previous session ---
         if continue_session or resume_id:
@@ -272,6 +268,13 @@ def main(
             if saved:
                 messages, turns, saved_at, sid = saved
                 session.restore(messages, turns)
+                # Point trace writer at the existing ATIF file
+                if session_dir_path:
+                    resume_trace_path = session_dir_path / f"{sid}.json"
+                else:
+                    resume_trace_path = Path(os.getcwd()) / ".klaude" / "sessions" / f"{sid}.json"
+                if resume_trace_path.exists():
+                    session.trace = TraceWriter.from_existing(resume_trace_path)
                 if not json_mode:
                     active_console.print(
                         f"[dim]Resumed session {sid} ({turns} turns, "
@@ -281,6 +284,12 @@ def main(
             else:
                 if not json_mode:
                     active_console.print("[yellow]No previous session found.[/yellow]")
+
+        # Create fresh trace writer if not resuming
+        if session.trace is None:
+            import time as _time
+            _trace_id = _time.strftime("%Y%m%d-%H%M%S")
+            session.trace = TraceWriter(_sd / f"{_trace_id}.json", model_name=effective_model)
 
         if not task:
             # --- REPL mode (never --json, that case is handled above) ---
