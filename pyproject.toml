@@ -5,7 +5,7 @@ description = "DIY Claude Code harness powered by open-source LLMs"
 requires-python = ">=3.12"
 dependencies = [
     "openai>=1.60.0",
-    "rich>=13.0.0",
+    "rich>=15.0.0",
     "click>=8.3.2",
     "mcp>=1.0.0",
 ]
