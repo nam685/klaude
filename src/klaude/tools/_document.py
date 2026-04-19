@@ -11,6 +11,8 @@ Office extractors import their libraries lazily so plain-text reads via
 
 from __future__ import annotations
 
+import shutil
+import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
 from typing import Callable
@@ -162,12 +164,36 @@ def _extract_pptx(path: Path) -> str:
     return "\n---\n".join(blocks)
 
 
+def _extract_pdf(path: Path) -> str:
+    """Extract text from a PDF via the pdftotext binary (poppler)."""
+    pdftotext = shutil.which("pdftotext")
+    if pdftotext is None:
+        raise RuntimeError(
+            "pdftotext not found. Install with: brew install poppler "
+            "(macOS) or apt install poppler-utils (Linux)."
+        )
+    proc = subprocess.run(
+        [pdftotext, "-layout", str(path), "-"],
+        capture_output=True,
+        timeout=30,
+    )
+    if proc.returncode == 3:
+        raise RuntimeError(f"{path}: password-protected document, cannot extract")
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"pdftotext failed (rc={proc.returncode}): "
+            f"{proc.stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    return proc.stdout.decode("utf-8", errors="replace")
+
+
 _EXTRACTORS: dict[str, Callable[[Path], str]] = {
     ".html": _extract_html,
     ".htm": _extract_html,
     ".docx": _extract_docx,
     ".xlsx": _extract_xlsx,
     ".pptx": _extract_pptx,
+    ".pdf": _extract_pdf,
 }
 
 

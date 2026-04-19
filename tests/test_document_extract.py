@@ -1,6 +1,11 @@
 """Tests for the shared document extraction helpers."""
 
+import shutil
+import subprocess
 from pathlib import Path
+from unittest.mock import patch
+
+import pytest
 
 from tests.fixtures import make_docx, make_pptx, make_xlsx
 
@@ -221,3 +226,49 @@ def test_pptx_extracts_grouped_shapes(tmp_path: Path) -> None:
     out = extract(p)
     assert "child one" in out
     assert "child two" in out
+
+
+# ---------------------------------------------------------------------------
+# PDF tests
+# ---------------------------------------------------------------------------
+
+PDFTOTEXT = shutil.which("pdftotext")
+
+
+@pytest.mark.skipif(PDFTOTEXT is None, reason="pdftotext not installed")
+def test_pdf_extracts_text(tmp_path: Path) -> None:
+    # Build a tiny PDF via pandoc if available, else skip.
+    if shutil.which("pandoc") is None:
+        pytest.skip("pandoc not installed")
+    md = tmp_path / "in.md"
+    md.write_text("hello PDF world\n")
+    pdf = tmp_path / "tiny.pdf"
+    subprocess.run(["pandoc", str(md), "-o", str(pdf)], check=True)
+    out = extract(pdf)
+    assert "hello PDF world" in out
+    assert 'format="pdf"' in out
+
+
+def test_pdf_missing_binary_gives_install_hint(tmp_path: Path) -> None:
+    p = tmp_path / "x.pdf"
+    p.write_bytes(b"%PDF-1.4\n%dummy\n")
+    with patch("klaude.tools._document.shutil.which", return_value=None):
+        out = extract(p)
+    assert "pdftotext not found" in out
+    assert "brew install poppler" in out or "apt install poppler-utils" in out
+
+
+def test_pdf_encrypted_clean_error(tmp_path: Path) -> None:
+    p = tmp_path / "enc.pdf"
+    p.write_bytes(b"%PDF-1.4\n")
+    from klaude.tools import _document as d
+
+    def fake_run(*args, **kwargs):
+        return subprocess.CompletedProcess(
+            args=args, returncode=3, stdout=b"", stderr=b"Error: PDF file is encrypted"
+        )
+
+    with patch.object(d.shutil, "which", return_value="/usr/bin/pdftotext"), \
+         patch.object(d.subprocess, "run", side_effect=fake_run):
+        out = extract(p)
+    assert "password-protected" in out.lower() or "encrypted" in out.lower()
