@@ -51,11 +51,13 @@ def test_vision_inherits_api_key_from_default(tmp_path: Path) -> None:
         """
 [default]
 model = "remote"
-api_key_env = "OPENROUTER_API_KEY"
+api_key_env = "PRIMARY_KEY_ENV"
 """,
     )
     cfg = load_config(start_dir=str(tmp_path))
-    assert cfg.vision.api_key_env == "OPENROUTER_API_KEY"
+    # Would fall back to VisionConfig default ("OPENROUTER_API_KEY") if
+    # inheritance wasn't wired up, so assert on the distinct value.
+    assert cfg.vision.api_key_env == "PRIMARY_KEY_ENV"
 
 
 def test_vision_inherits_api_key_from_profile(tmp_path: Path) -> None:
