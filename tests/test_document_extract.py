@@ -44,3 +44,26 @@ def test_extract_unsupported_extension(tmp_path: Path) -> None:
     out = extract(p)
     assert out.startswith("Error:")
     assert "unsupported" in out.lower() or "not supported" in out.lower()
+
+
+def test_html_strips_tags(tmp_path: Path) -> None:
+    p = tmp_path / "page.html"
+    p.write_text(
+        "<html><body><h1>Hello</h1><p>World <b>here</b></p>"
+        "<script>alert('x')</script></body></html>"
+    )
+    out = extract(p)
+    assert "Hello" in out
+    assert "World" in out
+    assert "here" in out
+    assert "<h1>" not in out
+    assert "<script>" not in out
+    # Script content dropped entirely
+    assert "alert" not in out
+
+
+def test_html_htm_extension(tmp_path: Path) -> None:
+    p = tmp_path / "page.htm"
+    p.write_text("<p>htm works</p>")
+    out = extract(p)
+    assert "htm works" in out

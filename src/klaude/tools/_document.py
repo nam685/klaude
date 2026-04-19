@@ -11,13 +11,45 @@ Office extractors import their libraries lazily so plain-text reads via
 
 from __future__ import annotations
 
+from html.parser import HTMLParser
 from pathlib import Path
 from typing import Callable
 
 MAX_EXTRACTED_BYTES = 200_000
 
-# Filled in by the per-format tasks below.
-_EXTRACTORS: dict[str, Callable[[Path], str]] = {}
+
+class _TextOnlyParser(HTMLParser):
+    def __init__(self) -> None:
+        super().__init__()
+        self._parts: list[str] = []
+        self._skip_depth = 0
+
+    def handle_starttag(self, tag: str, attrs: list) -> None:
+        if tag in ("script", "style"):
+            self._skip_depth += 1
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag in ("script", "style") and self._skip_depth > 0:
+            self._skip_depth -= 1
+
+    def handle_data(self, data: str) -> None:
+        if self._skip_depth == 0:
+            self._parts.append(data)
+
+    def get_text(self) -> str:
+        return " ".join("".join(self._parts).split())
+
+
+def _extract_html(path: Path) -> str:
+    parser = _TextOnlyParser()
+    parser.feed(path.read_text(encoding="utf-8", errors="replace"))
+    return parser.get_text()
+
+
+_EXTRACTORS: dict[str, Callable[[Path], str]] = {
+    ".html": _extract_html,
+    ".htm": _extract_html,
+}
 
 
 def _format_name(ext: str) -> str:
