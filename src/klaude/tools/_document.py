@@ -71,9 +71,17 @@ def _extract_html(path: Path) -> str:
     return parser.get_text()
 
 
+def _extract_docx(path: Path) -> str:
+    from docx import Document  # lazy import
+
+    doc = Document(str(path))
+    return "\n".join(p.text for p in doc.paragraphs)
+
+
 _EXTRACTORS: dict[str, Callable[[Path], str]] = {
     ".html": _extract_html,
     ".htm": _extract_html,
+    ".docx": _extract_docx,
 }
 
 

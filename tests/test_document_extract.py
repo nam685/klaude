@@ -2,6 +2,8 @@
 
 from pathlib import Path
 
+from tests.fixtures import make_docx
+
 from klaude.tools._document import (
     MAX_EXTRACTED_BYTES,
     extract,
@@ -89,3 +91,12 @@ def test_html_htm_extension(tmp_path: Path) -> None:
     p.write_text("<p>htm works</p>")
     out = extract(p)
     assert "htm works" in out
+
+
+def test_docx_extracts_paragraphs(tmp_path: Path) -> None:
+    p = make_docx(tmp_path / "tiny.docx", ["First line", "Second line", "Third"])
+    out = extract(p)
+    assert "First line" in out
+    assert "Second line" in out
+    assert "Third" in out
+    assert 'format="docx"' in out
