@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from tests.fixtures import make_docx, make_xlsx
+from tests.fixtures import make_docx, make_pptx, make_xlsx
 
 from klaude.tools._document import (
     MAX_EXTRACTED_BYTES,
@@ -160,3 +160,21 @@ def test_xlsx_formats_dates_as_iso(tmp_path: Path) -> None:
     assert "2026-04-20" in out
     # Should NOT contain the Python repr spelling.
     assert "2026-04-19 14:30:00" not in out
+
+
+def test_pptx_extracts_slide_text(tmp_path: Path) -> None:
+    p = make_pptx(
+        tmp_path / "tiny.pptx",
+        [
+            ["Intro", "hello world"],
+            ["Findings", "result: 42"],
+        ],
+    )
+    out = extract(p)
+    assert "# Slide 1" in out
+    assert "# Slide 2" in out
+    assert "Intro" in out
+    assert "hello world" in out
+    assert "Findings" in out
+    assert "result: 42" in out
+    assert "\n---\n" in out

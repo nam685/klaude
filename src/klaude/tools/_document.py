@@ -122,11 +122,30 @@ def _extract_xlsx(path: Path) -> str:
     return "\n---\n".join(blocks)
 
 
+def _extract_pptx(path: Path) -> str:
+    """Extract each slide's text, separated by '---'."""
+    from pptx import Presentation  # lazy import
+
+    prs = Presentation(str(path))
+    blocks: list[str] = []
+    for i, slide in enumerate(prs.slides, start=1):
+        texts: list[str] = []
+        for shape in slide.shapes:
+            if shape.has_text_frame:
+                for para in shape.text_frame.paragraphs:
+                    line = "".join(run.text for run in para.runs)
+                    if line:
+                        texts.append(line)
+        blocks.append(f"# Slide {i}\n" + "\n".join(texts))
+    return "\n---\n".join(blocks)
+
+
 _EXTRACTORS: dict[str, Callable[[Path], str]] = {
     ".html": _extract_html,
     ".htm": _extract_html,
     ".docx": _extract_docx,
     ".xlsx": _extract_xlsx,
+    ".pptx": _extract_pptx,
 }
 
 
