@@ -69,3 +69,21 @@ Installed automatically:
 | rich    | Terminal formatting, syntax highlighting |
 | click   | CLI argument parsing |
 | mcp     | Model Context Protocol support |
+
+## Optional system tools (for `read_document`)
+
+klaude's `read_document` tool shells out to system binaries for PDFs and
+images. They are **not** auto-installed; install them if you plan to read
+those formats:
+
+- **`poppler`** — provides `pdftotext`, needed for PDF extraction.
+  - macOS: `brew install poppler`
+  - Debian/Ubuntu: `sudo apt install poppler-utils`
+- **`tesseract`** — needed for image OCR (the fallback when no VLM is
+  configured).
+  - macOS: `brew install tesseract`
+  - Debian/Ubuntu: `sudo apt install tesseract-ocr`
+
+For VLM-based image descriptions instead of OCR, export
+`OPENROUTER_API_KEY` and configure the `[vision]` block in
+`.klaude.toml`. See `USAGE.md`.

@@ -56,6 +56,7 @@ EXTENDED_TOOLS = frozenset(
         "team_create",
         "team_delegate",
         "team_message",
+        "read_document",
     }
 )
 
