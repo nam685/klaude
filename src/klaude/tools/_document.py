@@ -90,6 +90,21 @@ def _extract_docx(path: Path) -> str:
     return "\n".join(lines)
 
 
+def _xlsx_cell_value(v: object) -> object:
+    """Normalize an openpyxl cell value for CSV output.
+
+    Dates/datetimes/times get ISO 8601 formatting instead of the Python
+    repr that csv.writer would otherwise produce.
+    """
+    import datetime as _dt
+
+    if v is None:
+        return ""
+    if isinstance(v, (_dt.datetime, _dt.date, _dt.time)):
+        return v.isoformat()
+    return v
+
+
 def _extract_xlsx(path: Path) -> str:
     """Extract each sheet of a .xlsx as a CSV block, separated by '---'."""
     import csv
@@ -102,7 +117,7 @@ def _extract_xlsx(path: Path) -> str:
         buf = io.StringIO()
         writer = csv.writer(buf)
         for row in ws.iter_rows(values_only=True):
-            writer.writerow(["" if v is None else v for v in row])
+            writer.writerow([_xlsx_cell_value(v) for v in row])
         blocks.append(f"# Sheet: {ws.title}\n{buf.getvalue().rstrip()}")
     return "\n---\n".join(blocks)
 

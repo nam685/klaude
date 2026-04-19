@@ -140,3 +140,23 @@ def test_xlsx_extracts_all_sheets_as_csv(tmp_path: Path) -> None:
     assert "topic" in out
     assert "compiler" in out
     assert "\n---\n" in out
+
+
+def test_xlsx_formats_dates_as_iso(tmp_path: Path) -> None:
+    import datetime as dt
+
+    p = make_xlsx(
+        tmp_path / "dates.xlsx",
+        {
+            "Log": [
+                ["when", "note"],
+                [dt.datetime(2026, 4, 19, 14, 30, 0), "first"],
+                [dt.date(2026, 4, 20), "second"],
+            ],
+        },
+    )
+    out = extract(p)
+    assert "2026-04-19T14:30:00" in out
+    assert "2026-04-20" in out
+    # Should NOT contain the Python repr spelling.
+    assert "2026-04-19 14:30:00" not in out
