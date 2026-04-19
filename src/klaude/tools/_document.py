@@ -11,11 +11,15 @@ Office extractors import their libraries lazily so plain-text reads via
 
 from __future__ import annotations
 
+import base64
+import os
 import shutil
 import subprocess
 from html.parser import HTMLParser
 from pathlib import Path
-from typing import Callable
+from typing import Any, Callable
+
+from klaude.config import VisionConfig, load_config
 
 MAX_EXTRACTED_BYTES = 200_000
 
@@ -131,8 +135,6 @@ def _extract_pptx(path: Path) -> str:
     grouped shapes. Slides with no extractable text still emit a header
     so slide numbering matches the source deck.
     """
-    from typing import Any
-
     from pptx import Presentation  # lazy import
     from pptx.enum.shapes import MSO_SHAPE_TYPE
 
@@ -208,6 +210,72 @@ def _extract_image_ocr(path: Path) -> str:
     return proc.stdout.decode("utf-8", errors="replace")
 
 
+_VLM_PROMPT = "Describe this image in detail. Include any visible text verbatim."
+_FALLBACK_NOTE_TMPL = (
+    "[vision.backend=vlm but {env} unset; used OCR fallback]\n"
+)
+
+
+def _vision_config() -> VisionConfig:
+    """Load the current VisionConfig. Overridable for tests."""
+    return load_config().vision
+
+
+def _openai_client(cfg: VisionConfig) -> Any:
+    from openai import OpenAI
+
+    api_key = os.environ.get(cfg.api_key_env, "")
+    return OpenAI(base_url=cfg.base_url, api_key=api_key)
+
+
+def _image_data_url(path: Path) -> str:
+    ext = path.suffix.lower().lstrip(".")
+    mime = {"jpg": "jpeg"}.get(ext, ext)
+    b64 = base64.b64encode(path.read_bytes()).decode("ascii")
+    return f"data:image/{mime};base64,{b64}"
+
+
+def _extract_image_vlm(path: Path, cfg: VisionConfig) -> str:
+    client = _openai_client(cfg)
+    try:
+        resp = client.chat.completions.create(
+            model=cfg.model,
+            messages=[
+                {
+                    "role": "user",
+                    "content": [
+                        {"type": "text", "text": _VLM_PROMPT},
+                        {
+                            "type": "image_url",
+                            "image_url": {"url": _image_data_url(path)},
+                        },
+                    ],
+                }
+            ],
+            timeout=30,
+        )
+    except Exception as e:
+        raise RuntimeError(f"VLM describe failed: {type(e).__name__}: {e}") from e
+    return resp.choices[0].message.content or ""
+
+
+def _extract_image(path: Path) -> str:
+    cfg = _vision_config()
+    if cfg.backend == "ocr":
+        return _extract_image_ocr(path)
+    # backend == "vlm"
+    if os.environ.get(cfg.api_key_env):
+        return _extract_image_vlm(path, cfg)
+    # Key unset → consult fallback.
+    if cfg.fallback == "error":
+        raise RuntimeError(
+            f"vision.backend=vlm requires ${cfg.api_key_env}; "
+            f"set it or set vision.fallback=\"ocr\"."
+        )
+    note = _FALLBACK_NOTE_TMPL.format(env="$" + cfg.api_key_env)
+    return note + _extract_image_ocr(path)
+
+
 _EXTRACTORS: dict[str, Callable[[Path], str]] = {
     ".html": _extract_html,
     ".htm": _extract_html,
@@ -216,6 +284,10 @@ _EXTRACTORS: dict[str, Callable[[Path], str]] = {
     ".pptx": _extract_pptx,
     ".pdf": _extract_pdf,
 }
+
+for _ext in (".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif", ".webp"):
+    _EXTRACTORS[_ext] = _extract_image
+del _ext
 
 
 def _format_name(ext: str) -> str:

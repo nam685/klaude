@@ -1,14 +1,16 @@
 """Tests for the shared document extraction helpers."""
 
+import base64
 import shutil
 import subprocess
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from tests.fixtures import make_docx, make_pptx, make_xlsx
 
+from klaude.config import VisionConfig
 from klaude.tools._document import (
     MAX_EXTRACTED_BYTES,
     extract,
@@ -286,3 +288,137 @@ def test_ocr_missing_binary_gives_install_hint(tmp_path: Path) -> None:
             msg = str(e)
     assert "tesseract not found" in msg
     assert "brew install tesseract" in msg or "apt install tesseract-ocr" in msg
+
+
+# ---------------------------------------------------------------------------
+# Image VLM / dispatcher tests
+# ---------------------------------------------------------------------------
+
+IMAGE_EXTS = (".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif", ".webp")
+
+
+def _tiny_png(path: Path) -> Path:
+    # 1x1 red PNG (67 bytes) — smallest legal PNG payload.
+    data = bytes.fromhex(
+        "89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4"
+        "890000000d49444154789c62f8cf000000000300015f5d9b8a0000000049454e"
+        "44ae426082"
+    )
+    path.write_bytes(data)
+    return path
+
+
+def test_image_vlm_backend_calls_model(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    from klaude.tools import _document as d
+
+    fake_client = MagicMock()
+    fake_client.chat.completions.create.return_value = MagicMock(
+        choices=[MagicMock(message=MagicMock(content="a red pixel"))]
+    )
+    monkeypatch.setattr(d, "_openai_client", lambda cfg: fake_client)
+
+    p = _tiny_png(tmp_path / "tiny.png")
+    cfg = VisionConfig()
+    monkeypatch.setattr(d, "_vision_config", lambda: cfg)
+
+    out = d.extract(p)
+    assert "a red pixel" in out
+    assert 'format="png"' in out
+
+    call = fake_client.chat.completions.create.call_args
+    messages = call.kwargs["messages"]
+    parts = messages[0]["content"]
+    image_part = next(part for part in parts if part["type"] == "image_url")
+    url = image_part["image_url"]["url"]
+    assert url.startswith("data:image/png;base64,")
+    b64 = url.split(",", 1)[1]
+    assert base64.b64decode(b64) == p.read_bytes()
+
+
+def test_image_vlm_fallback_noted_when_key_unset(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    from klaude.tools import _document as d
+
+    monkeypatch.setattr(d, "_extract_image_ocr", lambda p: "ocr text here")
+    monkeypatch.setattr(
+        d,
+        "_vision_config",
+        lambda: VisionConfig(backend="vlm", fallback="ocr",
+                             api_key_env="OPENROUTER_API_KEY"),
+    )
+
+    p = _tiny_png(tmp_path / "tiny.png")
+    out = d.extract(p)
+    assert "[vision.backend=vlm but $OPENROUTER_API_KEY unset; used OCR fallback]" in out
+    assert "ocr text here" in out
+
+
+def test_image_vlm_fallback_error_when_configured(tmp_path: Path, monkeypatch) -> None:
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    from klaude.tools import _document as d
+    monkeypatch.setattr(
+        d,
+        "_vision_config",
+        lambda: VisionConfig(backend="vlm", fallback="error",
+                             api_key_env="OPENROUTER_API_KEY"),
+    )
+    monkeypatch.setattr(d, "_extract_image_ocr", lambda p: pytest.fail("OCR called"))
+
+    p = _tiny_png(tmp_path / "tiny.png")
+    out = d.extract(p)
+    assert out.startswith("Error:")
+    assert "OPENROUTER_API_KEY" in out
+
+
+def test_image_backend_ocr_direct(tmp_path: Path, monkeypatch) -> None:
+    from klaude.tools import _document as d
+    monkeypatch.setattr(d, "_extract_image_ocr", lambda p: "plain ocr")
+    monkeypatch.setattr(
+        d, "_vision_config", lambda: VisionConfig(backend="ocr"),
+    )
+    p = _tiny_png(tmp_path / "tiny.png")
+    out = d.extract(p)
+    assert "plain ocr" in out
+    assert "used OCR fallback" not in out
+
+
+def test_image_extensions_all_dispatched(tmp_path: Path, monkeypatch) -> None:
+    from klaude.tools import _document as d
+    monkeypatch.setattr(d, "_extract_image_ocr", lambda p: f"ocr:{p.suffix}")
+    monkeypatch.setattr(
+        d, "_vision_config", lambda: VisionConfig(backend="ocr"),
+    )
+    for ext in IMAGE_EXTS:
+        p = _tiny_png(tmp_path / f"f{ext}")
+        out = d.extract(p)
+        assert f"ocr:{ext}" in out, f"{ext} not dispatched"
+
+
+def test_image_vlm_key_inherited_from_llm(tmp_path: Path, monkeypatch) -> None:
+    # Primary LLM config declares api_key_env=OPENROUTER_API_KEY; vision has no
+    # explicit api_key_env. Ensure the VLM path picks up the inherited env var.
+    (tmp_path / ".klaude.toml").write_text(
+        '[default]\nmodel = "remote"\napi_key_env = "OPENROUTER_API_KEY"\n'
+    )
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-inherited")
+    monkeypatch.chdir(tmp_path)
+
+    from klaude.tools import _document as d
+
+    seen_api_key: list[str] = []
+
+    def fake_client(cfg):
+        seen_api_key.append(cfg.api_key_env)
+        client = MagicMock()
+        client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="inherited key ok"))]
+        )
+        return client
+
+    monkeypatch.setattr(d, "_openai_client", fake_client)
+
+    p = _tiny_png(tmp_path / "tiny.png")
+    out = d.extract(p)
+    assert "inherited key ok" in out
+    assert seen_api_key == ["OPENROUTER_API_KEY"]
