@@ -25,6 +25,7 @@ class _TextOnlyParser(HTMLParser):
         self._skip_depth = 0
 
     def handle_starttag(self, tag: str, attrs: list) -> None:
+        del attrs  # unused; signature must match HTMLParser.handle_starttag
         if tag in ("script", "style"):
             self._skip_depth += 1
 
