@@ -90,10 +90,28 @@ def _extract_docx(path: Path) -> str:
     return "\n".join(lines)
 
 
+def _extract_xlsx(path: Path) -> str:
+    """Extract each sheet of a .xlsx as a CSV block, separated by '---'."""
+    import csv
+    import io
+    from openpyxl import load_workbook
+
+    wb = load_workbook(filename=str(path), read_only=True, data_only=True)
+    blocks: list[str] = []
+    for ws in wb.worksheets:
+        buf = io.StringIO()
+        writer = csv.writer(buf)
+        for row in ws.iter_rows(values_only=True):
+            writer.writerow(["" if v is None else v for v in row])
+        blocks.append(f"# Sheet: {ws.title}\n{buf.getvalue().rstrip()}")
+    return "\n---\n".join(blocks)
+
+
 _EXTRACTORS: dict[str, Callable[[Path], str]] = {
     ".html": _extract_html,
     ".htm": _extract_html,
     ".docx": _extract_docx,
+    ".xlsx": _extract_xlsx,
 }
 
 

@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from tests.fixtures import make_docx
+from tests.fixtures import make_docx, make_xlsx
 
 from klaude.tools._document import (
     MAX_EXTRACTED_BYTES,
@@ -121,3 +121,22 @@ def test_docx_extracts_table_cells(tmp_path: Path) -> None:
     assert "A1" in out and "B1" in out
     assert "A2" in out and "B2" in out
     assert "Trailing paragraph" in out
+
+
+def test_xlsx_extracts_all_sheets_as_csv(tmp_path: Path) -> None:
+    p = make_xlsx(
+        tmp_path / "tiny.xlsx",
+        {
+            "People": [["name", "age"], ["Ada", 36], ["Grace", 45]],
+            "Notes": [["topic"], ["compiler"]],
+        },
+    )
+    out = extract(p)
+    assert "# Sheet: People" in out
+    assert "# Sheet: Notes" in out
+    assert "name,age" in out
+    assert "Ada,36" in out
+    assert "Grace,45" in out
+    assert "topic" in out
+    assert "compiler" in out
+    assert "\n---\n" in out
