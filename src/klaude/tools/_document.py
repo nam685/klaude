@@ -18,6 +18,14 @@ from typing import Callable
 MAX_EXTRACTED_BYTES = 200_000
 
 
+_BLOCK_TAGS = frozenset(
+    {
+        "p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6",
+        "tr", "blockquote", "section", "article", "pre",
+    }
+)
+
+
 class _TextOnlyParser(HTMLParser):
     def __init__(self) -> None:
         super().__init__()
@@ -28,17 +36,33 @@ class _TextOnlyParser(HTMLParser):
         del attrs  # unused; signature must match HTMLParser.handle_starttag
         if tag in ("script", "style"):
             self._skip_depth += 1
+        elif tag == "br":
+            self._parts.append("\n")
 
     def handle_endtag(self, tag: str) -> None:
         if tag in ("script", "style") and self._skip_depth > 0:
             self._skip_depth -= 1
+        if tag in _BLOCK_TAGS:
+            self._parts.append("\n")
 
     def handle_data(self, data: str) -> None:
         if self._skip_depth == 0:
             self._parts.append(data)
 
     def get_text(self) -> str:
-        return " ".join("".join(self._parts).split())
+        raw = "".join(self._parts)
+        lines = [" ".join(line.split()) for line in raw.splitlines()]
+        # collapse runs of 2+ blank lines into exactly one blank line, strip edges
+        out: list[str] = []
+        prev_blank = False
+        for ln in lines:
+            if ln:
+                out.append(ln)
+                prev_blank = False
+            elif not prev_blank:
+                out.append("")
+                prev_blank = True
+        return "\n".join(out).strip()
 
 
 def _extract_html(path: Path) -> str:

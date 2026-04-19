@@ -60,6 +60,28 @@ def test_html_strips_tags(tmp_path: Path) -> None:
     assert "<script>" not in out
     # Script content dropped entirely
     assert "alert" not in out
+    # Structural breaks preserved between block elements
+    assert "Hello\n" in out or "Hello\n\n" in out
+
+
+def test_html_preserves_paragraph_breaks(tmp_path: Path) -> None:
+    p = tmp_path / "multi.html"
+    p.write_text(
+        "<html><body>"
+        "<p>First paragraph.</p>"
+        "<p>Second paragraph.</p>"
+        "<h2>Heading</h2>"
+        "<p>Third.</p>"
+        "</body></html>"
+    )
+    out = extract(p)
+    # Paragraphs on separate lines
+    lines = [ln for ln in out.splitlines() if "First paragraph" in ln or "Second paragraph" in ln]
+    assert len(lines) == 2
+    # Heading present as its own line
+    heading_idx = next(i for i, ln in enumerate(out.splitlines()) if "Heading" in ln)
+    third_idx = next(i for i, ln in enumerate(out.splitlines()) if "Third" in ln)
+    assert third_idx > heading_idx
 
 
 def test_html_htm_extension(tmp_path: Path) -> None:
