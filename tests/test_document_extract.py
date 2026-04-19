@@ -100,3 +100,24 @@ def test_docx_extracts_paragraphs(tmp_path: Path) -> None:
     assert "Second line" in out
     assert "Third" in out
     assert 'format="docx"' in out
+
+
+def test_docx_extracts_table_cells(tmp_path: Path) -> None:
+    from docx import Document
+
+    p = tmp_path / "with_table.docx"
+    doc = Document()
+    doc.add_paragraph("Intro paragraph")
+    table = doc.add_table(rows=2, cols=2)
+    table.rows[0].cells[0].text = "A1"
+    table.rows[0].cells[1].text = "B1"
+    table.rows[1].cells[0].text = "A2"
+    table.rows[1].cells[1].text = "B2"
+    doc.add_paragraph("Trailing paragraph")
+    doc.save(str(p))
+
+    out = extract(p)
+    assert "Intro paragraph" in out
+    assert "A1" in out and "B1" in out
+    assert "A2" in out and "B2" in out
+    assert "Trailing paragraph" in out

@@ -72,10 +72,22 @@ def _extract_html(path: Path) -> str:
 
 
 def _extract_docx(path: Path) -> str:
+    """Extract body paragraphs and table-cell text from a .docx file.
+
+    Headers, footers, and text frames inside shapes are intentionally
+    skipped; they are usually page furniture rather than body content.
+    """
     from docx import Document  # lazy import
 
     doc = Document(str(path))
-    return "\n".join(p.text for p in doc.paragraphs)
+    lines: list[str] = [p.text for p in doc.paragraphs]
+    for table in doc.tables:
+        for row in table.rows:
+            for cell in row.cells:
+                for p in cell.paragraphs:
+                    if p.text:
+                        lines.append(p.text)
+    return "\n".join(lines)
 
 
 _EXTRACTORS: dict[str, Callable[[Path], str]] = {
