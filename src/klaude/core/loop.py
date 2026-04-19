@@ -39,6 +39,7 @@ from klaude.tools.glob_search import tool as glob_tool
 from klaude.tools.grep_search import tool as grep_tool
 from klaude.tools.list_directory import tool as list_directory_tool
 from klaude.tools.read_file import tool as read_file_tool
+from klaude.tools.read_document import tool as read_document_tool
 from klaude.tools.write_file import tool as write_file_tool
 from klaude.tools.git import (
     git_status_tool,
@@ -107,6 +108,7 @@ def create_registry() -> ToolRegistry:
     """Create a registry with all built-in tools."""
     registry = ToolRegistry()
     registry.register(read_file_tool)
+    registry.register(read_document_tool)
     registry.register(write_file_tool)
     registry.register(edit_file_tool)
     registry.register(bash_tool)
