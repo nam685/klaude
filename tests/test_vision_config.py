@@ -1,6 +1,5 @@
 """Tests for [vision] config parsing and api-key inheritance."""
 
-import os
 from pathlib import Path
 
 import pytest
