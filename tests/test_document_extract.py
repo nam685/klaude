@@ -271,3 +271,18 @@ def test_pdf_encrypted_clean_error(tmp_path: Path) -> None:
          patch("klaude.tools._document.subprocess.run", side_effect=fake_run):
         out = extract(p)
     assert "password-protected" in out.lower() or "encrypted" in out.lower()
+
+
+def test_ocr_missing_binary_gives_install_hint(tmp_path: Path) -> None:
+    p = tmp_path / "x.png"
+    p.write_bytes(b"\x89PNG\r\n\x1a\n")  # binary presence; not a real PNG
+    from klaude.tools import _document as d
+
+    msg = ""
+    with patch("klaude.tools._document.shutil.which", return_value=None):
+        try:
+            d._extract_image_ocr(p)
+        except RuntimeError as e:
+            msg = str(e)
+    assert "tesseract not found" in msg
+    assert "brew install tesseract" in msg or "apt install tesseract-ocr" in msg

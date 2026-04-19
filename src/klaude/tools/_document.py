@@ -187,6 +187,27 @@ def _extract_pdf(path: Path) -> str:
     return proc.stdout.decode("utf-8", errors="replace")
 
 
+def _extract_image_ocr(path: Path) -> str:
+    """Extract text from an image via the tesseract binary."""
+    tesseract = shutil.which("tesseract")
+    if tesseract is None:
+        raise RuntimeError(
+            "tesseract not found. Install with: brew install tesseract "
+            "(macOS) or apt install tesseract-ocr (Linux)."
+        )
+    proc = subprocess.run(
+        [tesseract, str(path), "-", "-l", "eng"],
+        capture_output=True,
+        timeout=60,
+    )
+    if proc.returncode != 0:
+        raise RuntimeError(
+            f"tesseract failed (rc={proc.returncode}): "
+            f"{proc.stderr.decode('utf-8', errors='replace').strip()}"
+        )
+    return proc.stdout.decode("utf-8", errors="replace")
+
+
 _EXTRACTORS: dict[str, Callable[[Path], str]] = {
     ".html": _extract_html,
     ".htm": _extract_html,
