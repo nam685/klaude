@@ -261,14 +261,13 @@ def test_pdf_missing_binary_gives_install_hint(tmp_path: Path) -> None:
 def test_pdf_encrypted_clean_error(tmp_path: Path) -> None:
     p = tmp_path / "enc.pdf"
     p.write_bytes(b"%PDF-1.4\n")
-    from klaude.tools import _document as d
 
-    def fake_run(*args, **kwargs):
+    def fake_run(*args, **_kwargs):
         return subprocess.CompletedProcess(
             args=args, returncode=3, stdout=b"", stderr=b"Error: PDF file is encrypted"
         )
 
-    with patch.object(d.shutil, "which", return_value="/usr/bin/pdftotext"), \
-         patch.object(d.subprocess, "run", side_effect=fake_run):
+    with patch("klaude.tools._document.shutil.which", return_value="/usr/bin/pdftotext"), \
+         patch("klaude.tools._document.subprocess.run", side_effect=fake_run):
         out = extract(p)
     assert "password-protected" in out.lower() or "encrypted" in out.lower()
