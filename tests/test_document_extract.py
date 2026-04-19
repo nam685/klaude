@@ -178,3 +178,46 @@ def test_pptx_extracts_slide_text(tmp_path: Path) -> None:
     assert "Findings" in out
     assert "result: 42" in out
     assert "\n---\n" in out
+
+
+def test_pptx_extracts_table_cells(tmp_path: Path) -> None:
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    p = tmp_path / "table.pptx"
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    slide.shapes.title.text = "Results"
+    shape = slide.shapes.add_table(
+        rows=2, cols=2,
+        left=Inches(1), top=Inches(2),
+        width=Inches(6), height=Inches(2),
+    )
+    t = shape.table
+    t.cell(0, 0).text = "metric"
+    t.cell(0, 1).text = "value"
+    t.cell(1, 0).text = "latency"
+    t.cell(1, 1).text = "42ms"
+    prs.save(str(p))
+    out = extract(p)
+    assert "Results" in out
+    assert "metric" in out and "value" in out
+    assert "latency" in out and "42ms" in out
+
+
+def test_pptx_extracts_grouped_shapes(tmp_path: Path) -> None:
+    from pptx import Presentation
+    from pptx.util import Inches
+
+    p = tmp_path / "grouped.pptx"
+    prs = Presentation()
+    slide = prs.slides.add_slide(prs.slide_layouts[5])
+    slide.shapes.title.text = "Header"
+    tb1 = slide.shapes.add_textbox(Inches(1), Inches(2), Inches(3), Inches(1))
+    tb1.text_frame.text = "child one"
+    tb2 = slide.shapes.add_textbox(Inches(1), Inches(3), Inches(3), Inches(1))
+    tb2.text_frame.text = "child two"
+    prs.save(str(p))
+    out = extract(p)
+    assert "child one" in out
+    assert "child two" in out

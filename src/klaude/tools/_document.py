@@ -123,19 +123,39 @@ def _extract_xlsx(path: Path) -> str:
 
 
 def _extract_pptx(path: Path) -> str:
-    """Extract each slide's text, separated by '---'."""
+    """Extract each slide's text, separated by '---'.
+
+    Captures text from text frames, tables, and shapes nested inside
+    grouped shapes. Slides with no extractable text still emit a header
+    so slide numbering matches the source deck.
+    """
     from pptx import Presentation  # lazy import
+    from pptx.enum.shapes import MSO_SHAPE_TYPE
+
+    def _shape_text(shape: object) -> list[str]:
+        lines: list[str] = []
+        if getattr(shape, "shape_type", None) == MSO_SHAPE_TYPE.GROUP:
+            for child in shape.shapes:  # type: ignore[attr-defined]
+                lines.extend(_shape_text(child))
+            return lines
+        if getattr(shape, "has_text_frame", False):
+            for para in shape.text_frame.paragraphs:  # type: ignore[attr-defined]
+                if para.text:
+                    lines.append(para.text)
+        if getattr(shape, "has_table", False):
+            for row in shape.table.rows:  # type: ignore[attr-defined]
+                for cell in row.cells:
+                    for para in cell.text_frame.paragraphs:
+                        if para.text:
+                            lines.append(para.text)
+        return lines
 
     prs = Presentation(str(path))
     blocks: list[str] = []
     for i, slide in enumerate(prs.slides, start=1):
         texts: list[str] = []
         for shape in slide.shapes:
-            if shape.has_text_frame:
-                for para in shape.text_frame.paragraphs:
-                    line = "".join(run.text for run in para.runs)
-                    if line:
-                        texts.append(line)
+            texts.extend(_shape_text(shape))
         blocks.append(f"# Slide {i}\n" + "\n".join(texts))
     return "\n---\n".join(blocks)
 
