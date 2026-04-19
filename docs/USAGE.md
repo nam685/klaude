@@ -319,3 +319,49 @@ Tool access levels:
 ## Undo
 
 Type `/undo` or press **Esc** to revert the last turn. This restores the conversation history to its state before that turn. Up to 10 snapshots are kept (configurable via `undo_depth`).
+
+## Reading documents and images (`read_document`)
+
+klaude can read PDFs, Word/Excel/PowerPoint, HTML, and images alongside
+plain source files.
+
+- Plain text files (source code, JSON, CSV, MD, ...) continue to go
+  through `read_file` and are returned verbatim.
+- PDFs / Office / images / HTML are extracted to text and wrapped in a
+  `<system-reminder>` envelope warning klaude to treat the contents as
+  untrusted (they can contain prompt-injection attempts).
+- `read_file` auto-dispatches known binary extensions to `read_document`,
+  so in most cases you don't need to call `read_document` directly.
+
+### Image handling: VLM-first, OCR fallback
+
+The default backend describes images with an OpenRouter free-tier VLM
+(`meta-llama/llama-3.2-11b-vision-instruct:free`). OCR is the fallback
+when the key is unavailable.
+
+```toml
+# .klaude.toml (optional — sensible defaults are built in)
+[vision]
+backend     = "vlm"           # default; "ocr" to skip VLM
+model       = "meta-llama/llama-3.2-11b-vision-instruct:free"
+base_url    = "https://openrouter.ai/api/v1"
+# api_key_env inherits from [default]/[profiles.*] if they set api_key_env,
+# else defaults to OPENROUTER_API_KEY. Override only if you want a
+# different key for vision:
+# api_key_env = "OPENROUTER_API_KEY"
+fallback    = "ocr"           # "ocr" (default) or "error"
+```
+
+Resolution order:
+
+1. `backend = "vlm"` and the env var is set → VLM describe.
+2. `backend = "vlm"` and key unset → OCR with a `[...used OCR fallback]`
+   note prepended (if `fallback="ocr"`), or a clear error (if
+   `fallback="error"`).
+3. `backend = "ocr"` → tesseract directly.
+
+### Rate limits
+
+OpenRouter's free tier imposes ~20 req/min, ~200 req/day on the default
+model. Fine for interactive use; agent loops processing many images
+should set `fallback="ocr"` or configure a paid model.
