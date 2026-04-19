@@ -22,6 +22,7 @@ from typing import Any, Callable
 from klaude.config import VisionConfig, load_config
 
 MAX_EXTRACTED_BYTES = 200_000
+MAX_VLM_IMAGE_BYTES = 10_000_000  # 10 MB raw image cap before base64 encoding
 
 
 _BLOCK_TAGS = frozenset(
@@ -217,11 +218,22 @@ _FALLBACK_NOTE_TMPL = (
 
 
 def _vision_config() -> VisionConfig:
-    """Load the current VisionConfig. Overridable for tests."""
+    """Resolve the active VisionConfig.
+
+    Test seam: tests monkeypatch this to inject a synthetic VisionConfig.
+    New production code should call this helper rather than
+    ``load_config().vision`` directly, so that monkeypatching keeps working.
+    """
     return load_config().vision
 
 
 def _openai_client(cfg: VisionConfig) -> Any:
+    """Build an OpenAI-compatible client for the VLM path.
+
+    Test seam: tests monkeypatch this to return a MagicMock instead of a
+    real client. Always go through this helper when you need a client in
+    _document.py.
+    """
     from openai import OpenAI
 
     api_key = os.environ.get(cfg.api_key_env, "")
@@ -229,6 +241,12 @@ def _openai_client(cfg: VisionConfig) -> Any:
 
 
 def _image_data_url(path: Path) -> str:
+    size = path.stat().st_size
+    if size > MAX_VLM_IMAGE_BYTES:
+        raise RuntimeError(
+            f"{path}: image too large for VLM ({size:,} bytes > "
+            f"{MAX_VLM_IMAGE_BYTES:,} cap). Downsize or switch vision.backend to 'ocr'."
+        )
     ext = path.suffix.lower().lstrip(".")
     mime = {"jpg": "jpeg"}.get(ext, ext)
     b64 = base64.b64encode(path.read_bytes()).decode("ascii")

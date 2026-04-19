@@ -395,6 +395,24 @@ def test_image_extensions_all_dispatched(tmp_path: Path, monkeypatch) -> None:
         assert f"ocr:{ext}" in out, f"{ext} not dispatched"
 
 
+def test_image_vlm_refuses_oversize(tmp_path: Path, monkeypatch) -> None:
+    """An oversize image should surface a clear error instead of silently uploading."""
+    from klaude.tools import _document as d
+
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
+    monkeypatch.setattr(d, "_vision_config", lambda: VisionConfig())
+    monkeypatch.setattr(d, "_openai_client", lambda _cfg: MagicMock())
+
+    # Fake an 11 MB file by writing 11_000_000 bytes of PNG-headered junk.
+    p = tmp_path / "huge.png"
+    p.write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * (11_000_000 - 8))
+
+    out = d.extract(p)
+    assert out.startswith("Error:")
+    assert "too large for VLM" in out
+    assert "'ocr'" in out or '"ocr"' in out
+
+
 def test_image_vlm_key_inherited_from_llm(tmp_path: Path, monkeypatch) -> None:
     # Primary LLM config declares api_key_env=OPENROUTER_API_KEY; vision has no
     # explicit api_key_env. Ensure the VLM path picks up the inherited env var.
