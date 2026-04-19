@@ -316,7 +316,7 @@ def test_image_vlm_backend_calls_model(tmp_path: Path, monkeypatch) -> None:
     fake_client.chat.completions.create.return_value = MagicMock(
         choices=[MagicMock(message=MagicMock(content="a red pixel"))]
     )
-    monkeypatch.setattr(d, "_openai_client", lambda cfg: fake_client)
+    monkeypatch.setattr(d, "_openai_client", lambda _cfg: fake_client)
 
     p = _tiny_png(tmp_path / "tiny.png")
     cfg = VisionConfig()
@@ -340,7 +340,7 @@ def test_image_vlm_fallback_noted_when_key_unset(tmp_path: Path, monkeypatch) ->
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     from klaude.tools import _document as d
 
-    monkeypatch.setattr(d, "_extract_image_ocr", lambda p: "ocr text here")
+    monkeypatch.setattr(d, "_extract_image_ocr", lambda _p: "ocr text here")
     monkeypatch.setattr(
         d,
         "_vision_config",
@@ -363,7 +363,7 @@ def test_image_vlm_fallback_error_when_configured(tmp_path: Path, monkeypatch) -
         lambda: VisionConfig(backend="vlm", fallback="error",
                              api_key_env="OPENROUTER_API_KEY"),
     )
-    monkeypatch.setattr(d, "_extract_image_ocr", lambda p: pytest.fail("OCR called"))
+    monkeypatch.setattr(d, "_extract_image_ocr", lambda _p: pytest.fail("OCR called"))
 
     p = _tiny_png(tmp_path / "tiny.png")
     out = d.extract(p)
@@ -373,7 +373,7 @@ def test_image_vlm_fallback_error_when_configured(tmp_path: Path, monkeypatch) -
 
 def test_image_backend_ocr_direct(tmp_path: Path, monkeypatch) -> None:
     from klaude.tools import _document as d
-    monkeypatch.setattr(d, "_extract_image_ocr", lambda p: "plain ocr")
+    monkeypatch.setattr(d, "_extract_image_ocr", lambda _p: "plain ocr")
     monkeypatch.setattr(
         d, "_vision_config", lambda: VisionConfig(backend="ocr"),
     )
