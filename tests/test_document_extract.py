@@ -11,7 +11,7 @@ from klaude.tools._document import (
 
 
 def test_wrap_includes_system_reminder_and_document_tags() -> None:
-    out = _wrap("hello", path="/x.txt", format="txt")
+    out = _wrap("hello", path="/x.txt", fmt="txt")
     assert "<system-reminder>" in out
     assert "</system-reminder>" in out
     assert 'path="/x.txt"' in out
