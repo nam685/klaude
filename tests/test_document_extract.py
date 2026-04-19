@@ -85,7 +85,11 @@ def test_html_preserves_paragraph_breaks(tmp_path: Path) -> None:
     )
     out = extract(p)
     # Paragraphs on separate lines
-    lines = [ln for ln in out.splitlines() if "First paragraph" in ln or "Second paragraph" in ln]
+    lines = [
+        ln
+        for ln in out.splitlines()
+        if "First paragraph" in ln or "Second paragraph" in ln
+    ]
     assert len(lines) == 2
     # Heading present as its own line
     heading_idx = next(i for i, ln in enumerate(out.splitlines()) if "Heading" in ln)
@@ -196,9 +200,12 @@ def test_pptx_extracts_table_cells(tmp_path: Path) -> None:
     slide = prs.slides.add_slide(prs.slide_layouts[5])
     slide.shapes.title.text = "Results"
     shape = slide.shapes.add_table(
-        rows=2, cols=2,
-        left=Inches(1), top=Inches(2),
-        width=Inches(6), height=Inches(2),
+        rows=2,
+        cols=2,
+        left=Inches(1),
+        top=Inches(2),
+        width=Inches(6),
+        height=Inches(2),
     )
     t = shape.table
     t.cell(0, 0).text = "metric"
@@ -269,8 +276,10 @@ def test_pdf_encrypted_clean_error(tmp_path: Path) -> None:
             args=args, returncode=3, stdout=b"", stderr=b"Error: PDF file is encrypted"
         )
 
-    with patch("klaude.tools._document.shutil.which", return_value="/usr/bin/pdftotext"), \
-         patch("klaude.tools._document.subprocess.run", side_effect=fake_run):
+    with (
+        patch("klaude.tools._document.shutil.which", return_value="/usr/bin/pdftotext"),
+        patch("klaude.tools._document.subprocess.run", side_effect=fake_run),
+    ):
         out = extract(p)
     assert "password-protected" in out.lower() or "encrypted" in out.lower()
 
@@ -344,24 +353,29 @@ def test_image_vlm_fallback_noted_when_key_unset(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(
         d,
         "_vision_config",
-        lambda: VisionConfig(backend="vlm", fallback="ocr",
-                             api_key_env="OPENROUTER_API_KEY"),
+        lambda: VisionConfig(
+            backend="vlm", fallback="ocr", api_key_env="OPENROUTER_API_KEY"
+        ),
     )
 
     p = _tiny_png(tmp_path / "tiny.png")
     out = d.extract(p)
-    assert "[vision.backend=vlm but $OPENROUTER_API_KEY unset; used OCR fallback]" in out
+    assert (
+        "[vision.backend=vlm but $OPENROUTER_API_KEY unset; used OCR fallback]" in out
+    )
     assert "ocr text here" in out
 
 
 def test_image_vlm_fallback_error_when_configured(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
     from klaude.tools import _document as d
+
     monkeypatch.setattr(
         d,
         "_vision_config",
-        lambda: VisionConfig(backend="vlm", fallback="error",
-                             api_key_env="OPENROUTER_API_KEY"),
+        lambda: VisionConfig(
+            backend="vlm", fallback="error", api_key_env="OPENROUTER_API_KEY"
+        ),
     )
     monkeypatch.setattr(d, "_extract_image_ocr", lambda _p: pytest.fail("OCR called"))
 
@@ -373,9 +387,12 @@ def test_image_vlm_fallback_error_when_configured(tmp_path: Path, monkeypatch) -
 
 def test_image_backend_ocr_direct(tmp_path: Path, monkeypatch) -> None:
     from klaude.tools import _document as d
+
     monkeypatch.setattr(d, "_extract_image_ocr", lambda _p: "plain ocr")
     monkeypatch.setattr(
-        d, "_vision_config", lambda: VisionConfig(backend="ocr"),
+        d,
+        "_vision_config",
+        lambda: VisionConfig(backend="ocr"),
     )
     p = _tiny_png(tmp_path / "tiny.png")
     out = d.extract(p)
@@ -385,9 +402,12 @@ def test_image_backend_ocr_direct(tmp_path: Path, monkeypatch) -> None:
 
 def test_image_extensions_all_dispatched(tmp_path: Path, monkeypatch) -> None:
     from klaude.tools import _document as d
+
     monkeypatch.setattr(d, "_extract_image_ocr", lambda p: f"ocr:{p.suffix}")
     monkeypatch.setattr(
-        d, "_vision_config", lambda: VisionConfig(backend="ocr"),
+        d,
+        "_vision_config",
+        lambda: VisionConfig(backend="ocr"),
     )
     for ext in IMAGE_EXTS:
         p = _tiny_png(tmp_path / f"f{ext}")

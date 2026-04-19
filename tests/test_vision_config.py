@@ -13,7 +13,7 @@ def _write_config(tmp_path: Path, body: str) -> Path:
 
 
 def test_vision_defaults_when_missing(tmp_path: Path) -> None:
-    _write_config(tmp_path, "[default]\nmodel = \"local\"\n")
+    _write_config(tmp_path, '[default]\nmodel = "local"\n')
     cfg = load_config(start_dir=str(tmp_path))
     assert cfg.vision.backend == "vlm"
     assert cfg.vision.model == "meta-llama/llama-3.2-11b-vision-instruct:free"

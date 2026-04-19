@@ -27,8 +27,20 @@ MAX_VLM_IMAGE_BYTES = 10_000_000  # 10 MB raw image cap before base64 encoding
 
 _BLOCK_TAGS = frozenset(
     {
-        "p", "div", "li", "h1", "h2", "h3", "h4", "h5", "h6",
-        "tr", "blockquote", "section", "article", "pre",
+        "p",
+        "div",
+        "li",
+        "h1",
+        "h2",
+        "h3",
+        "h4",
+        "h5",
+        "h6",
+        "tr",
+        "blockquote",
+        "section",
+        "article",
+        "pre",
     }
 )
 
@@ -212,9 +224,7 @@ def _extract_image_ocr(path: Path) -> str:
 
 
 _VLM_PROMPT = "Describe this image in detail. Include any visible text verbatim."
-_FALLBACK_NOTE_TMPL = (
-    "[vision.backend=vlm but {env} unset; used OCR fallback]\n"
-)
+_FALLBACK_NOTE_TMPL = "[vision.backend=vlm but {env} unset; used OCR fallback]\n"
 
 
 def _vision_config() -> VisionConfig:
@@ -288,7 +298,7 @@ def _extract_image(path: Path) -> str:
     if cfg.fallback == "error":
         raise RuntimeError(
             f"vision.backend=vlm requires ${cfg.api_key_env}; "
-            f"set it or set vision.fallback=\"ocr\"."
+            f'set it or set vision.fallback="ocr".'
         )
     note = _FALLBACK_NOTE_TMPL.format(env="$" + cfg.api_key_env)
     return note + _extract_image_ocr(path)

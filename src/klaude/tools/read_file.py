@@ -12,8 +12,19 @@ from klaude.tools.registry import Tool
 
 _BINARY_EXTS = frozenset(
     {
-        ".pdf", ".docx", ".xlsx", ".pptx", ".html", ".htm",
-        ".png", ".jpg", ".jpeg", ".tiff", ".bmp", ".gif", ".webp",
+        ".pdf",
+        ".docx",
+        ".xlsx",
+        ".pptx",
+        ".html",
+        ".htm",
+        ".png",
+        ".jpg",
+        ".jpeg",
+        ".tiff",
+        ".bmp",
+        ".gif",
+        ".webp",
     }
 )
 
@@ -28,6 +39,7 @@ def handle_read_file(path: str) -> str:
 
     if p.suffix.lower() in _BINARY_EXTS:
         from klaude.tools._document import extract  # lazy import
+
         return extract(p)
 
     try:
