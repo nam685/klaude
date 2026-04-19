@@ -137,9 +137,9 @@ def handle_read_file(path: str) -> str:
         return f"Error: {path} is binary. Use read_document or convert to text."
 ```
 
-`read_document` calls the same `extract()` but also accepts text files
-(returns their contents through the wrapper) so agents can force the
-document path if they want the safety wrapper applied.
+`read_document` calls the same `extract()`. Unsupported extensions return
+a clear error pointing the agent at `read_file` — text files stay on the
+fast path, no wrapper overhead for source reads.
 
 ### Prompt-injection safety wrapper
 
