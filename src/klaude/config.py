@@ -58,6 +58,17 @@ class MCPServerConfig:
 
 
 @dataclass
+class VisionConfig:
+    """Configuration for read_document's image handling."""
+
+    backend: str = "vlm"
+    model: str = "meta-llama/llama-3.2-11b-vision-instruct:free"
+    base_url: str = "https://openrouter.ai/api/v1"
+    api_key_env: str = "OPENROUTER_API_KEY"
+    fallback: str = "ocr"
+
+
+@dataclass
 class KlaudeConfig:
     """Resolved configuration for a klaude session."""
 
@@ -85,6 +96,9 @@ class KlaudeConfig:
 
     # Undo history (number of turn snapshots to keep)
     undo_depth: int = 10
+
+    # Vision / image handling
+    vision: VisionConfig = field(default_factory=VisionConfig)
 
 
 def find_config_file(start_dir: str | None = None) -> Path | None:
@@ -201,5 +215,38 @@ def load_config(
     # --- [mcp] section ---
     mcp = data.get("mcp", {})
     config.mcp_servers = _parse_mcp_servers(mcp)
+
+    # --- [vision] section (with api_key_env inheritance from primary config) ---
+    primary_key_env: str | None = None
+    if "api_key_env" in default:
+        primary_key_env = default["api_key_env"]
+    if profile:
+        prof = data.get("profiles", {}).get(profile, {})
+        if "api_key_env" in prof:
+            primary_key_env = prof["api_key_env"]
+
+    vision_raw = data.get("vision", {})
+    vision = VisionConfig()
+    if "backend" in vision_raw:
+        if vision_raw["backend"] not in ("vlm", "ocr"):
+            raise ValueError(
+                f"vision.backend must be 'vlm' or 'ocr', got {vision_raw['backend']!r}"
+            )
+        vision.backend = vision_raw["backend"]
+    if "model" in vision_raw:
+        vision.model = vision_raw["model"]
+    if "base_url" in vision_raw:
+        vision.base_url = vision_raw["base_url"]
+    if "fallback" in vision_raw:
+        if vision_raw["fallback"] not in ("ocr", "error"):
+            raise ValueError(
+                f"vision.fallback must be 'ocr' or 'error', got {vision_raw['fallback']!r}"
+            )
+        vision.fallback = vision_raw["fallback"]
+    if "api_key_env" in vision_raw:
+        vision.api_key_env = vision_raw["api_key_env"]
+    elif primary_key_env:
+        vision.api_key_env = primary_key_env
+    config.vision = vision
 
     return config
