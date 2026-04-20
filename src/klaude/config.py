@@ -66,6 +66,10 @@ class VisionConfig:
     base_url: str = "https://openrouter.ai/api/v1"
     api_key_env: str = "OPENROUTER_API_KEY"
     fallback: str = "ocr"
+    # Resolved API key: set from literal `[vision] api_key`, or
+    # `[vision] api_key_env` lookup, or inherited from the primary LLM's
+    # resolved key. Empty means "no key available" → fallback path.
+    api_key: str = ""
 
 
 @dataclass
@@ -216,7 +220,7 @@ def load_config(
     mcp = data.get("mcp", {})
     config.mcp_servers = _parse_mcp_servers(mcp)
 
-    # --- [vision] section (with api_key_env inheritance from primary config) ---
+    # --- [vision] section (with api key inheritance from primary config) ---
     primary_key_env: str | None = None
     if "api_key_env" in default:
         primary_key_env = default["api_key_env"]
@@ -229,9 +233,7 @@ def load_config(
     vision = VisionConfig()
     if "backend" in vision_raw:
         if vision_raw["backend"] not in ("vlm", "ocr"):
-            raise ValueError(
-                f"vision.backend must be 'vlm' or 'ocr', got {vision_raw['backend']!r}"
-            )
+            raise ValueError(f"vision.backend must be 'vlm' or 'ocr', got {vision_raw['backend']!r}")
         vision.backend = vision_raw["backend"]
     if "model" in vision_raw:
         vision.model = vision_raw["model"]
@@ -239,14 +241,24 @@ def load_config(
         vision.base_url = vision_raw["base_url"]
     if "fallback" in vision_raw:
         if vision_raw["fallback"] not in ("ocr", "error"):
-            raise ValueError(
-                f"vision.fallback must be 'ocr' or 'error', got {vision_raw['fallback']!r}"
-            )
+            raise ValueError(f"vision.fallback must be 'ocr' or 'error', got {vision_raw['fallback']!r}")
         vision.fallback = vision_raw["fallback"]
     if "api_key_env" in vision_raw:
         vision.api_key_env = vision_raw["api_key_env"]
     elif primary_key_env:
         vision.api_key_env = primary_key_env
+
+    # Resolve the actual key to use. Precedence:
+    #   [vision] api_key (literal)
+    # → [vision] api_key_env (env lookup)
+    # → primary LLM's resolved api_key (already went through literal-or-env
+    #   in the [default]/[profiles] loader above).
+    if "api_key" in vision_raw:
+        vision.api_key = _resolve_env_value(vision_raw["api_key"])
+    elif "api_key_env" in vision_raw:
+        vision.api_key = os.environ.get(vision_raw["api_key_env"], "")
+    elif config.api_key and config.api_key != "not-needed":
+        vision.api_key = config.api_key
     config.vision = vision
 
     return config
