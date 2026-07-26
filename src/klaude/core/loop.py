@@ -73,6 +73,21 @@ from klaude.tools.worktree import tool as worktree_tool
 MAX_ITERATIONS = 50
 
 
+def _describe_llm_error(e: Exception) -> str:
+    """Format an OpenAI SDK error, including the underlying cause if chained.
+
+    openai wraps *any* exception raised while sending a request — timeouts,
+    TCP failures, TLS errors, or unrelated bugs — in APIConnectionError with
+    the generic message "Connection error." (see openai._base_client's broad
+    `except Exception: raise APIConnectionError(...) from err`). Without the
+    chained cause, that message is a dead end for diagnosis.
+    """
+    cause = e.__cause__
+    if cause is not None:
+        return f"{e} ({type(cause).__name__}: {cause})"
+    return str(e)
+
+
 def _is_git_repo() -> bool:
     """Check if the current directory is inside a git repository."""
     path = os.getcwd()
@@ -314,7 +329,7 @@ class Session:
                     self.history.messages, tools=self.tool_schemas
                 )
             except (APIConnectionError, APITimeoutError, InternalServerError) as e:
-                error_msg = f"Stopped: LLM API error — {e}"
+                error_msg = f"Stopped: LLM API error — {_describe_llm_error(e)}"
                 if not self.quiet:
                     self.console.print(f"\n[red]{error_msg}[/red]")
                 if self.trace:
