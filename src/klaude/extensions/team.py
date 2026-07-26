@@ -22,21 +22,22 @@ from dataclasses import dataclass
 from datetime import datetime
 
 from klaude.core.client import LLMClient
-from klaude.tools.registry import ToolRegistry
-from klaude.tools.read_file import tool as read_file_tool
+from klaude.core.tool_call_dict import build_tool_call_dict
+from klaude.tools.bash import tool as bash_tool
+from klaude.tools.edit_file import tool as edit_file_tool
+from klaude.tools.git import (
+    git_commit_tool,
+    git_diff_tool,
+    git_log_tool,
+    git_status_tool,
+)
 from klaude.tools.glob_search import tool as glob_tool
 from klaude.tools.grep_search import tool as grep_tool
 from klaude.tools.list_directory import tool as list_directory_tool
-from klaude.tools.git import (
-    git_status_tool,
-    git_diff_tool,
-    git_log_tool,
-    git_commit_tool,
-)
-from klaude.tools.write_file import tool as write_file_tool
-from klaude.tools.edit_file import tool as edit_file_tool
-from klaude.tools.bash import tool as bash_tool
+from klaude.tools.read_file import tool as read_file_tool
+from klaude.tools.registry import ToolRegistry
 from klaude.tools.web_fetch import tool as web_fetch_tool
+from klaude.tools.write_file import tool as write_file_tool
 
 # Max iterations per team member to prevent runaway loops
 _MAX_MEMBER_ITERATIONS = 20
@@ -216,14 +217,12 @@ def run_agent(
         assistant_msg: dict = {"role": "assistant", "content": msg.content or ""}
         if msg.tool_calls:
             assistant_msg["tool_calls"] = [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
+                build_tool_call_dict(
+                    tc.id,
+                    tc.function.name,
+                    tc.function.arguments,
+                    getattr(tc, "extra_content", None),
+                )
                 for tc in msg.tool_calls
             ]
         messages.append(assistant_msg)

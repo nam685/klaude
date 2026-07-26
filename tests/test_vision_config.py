@@ -13,12 +13,60 @@ def _write_config(tmp_path: Path, body: str) -> Path:
 
 
 def test_vision_defaults_when_missing(tmp_path: Path) -> None:
+    """With no [vision] section, vision reuses the primary model/base_url —
+    modern multimodal models (Gemini included) already handle images
+    natively, so a separate vision provider is opt-in, not required."""
     _write_config(tmp_path, '[default]\nmodel = "local"\n')
     cfg = load_config(start_dir=str(tmp_path))
     assert cfg.vision.backend == "vlm"
+    assert cfg.vision.model == cfg.model == "local"
+    assert cfg.vision.base_url == cfg.base_url
+    assert cfg.vision.fallback == "ocr"
+    assert cfg.vision.api_key_env == ""
+
+
+def test_vision_inherits_model_and_base_url_from_default(tmp_path: Path) -> None:
+    """Regression test for the production bug where [vision] silently kept
+    OpenRouter's base_url/model defaults after [default] switched providers
+    (Gemini), so an inherited Gemini key got sent to OpenRouter's endpoint."""
+    _write_config(
+        tmp_path,
+        """
+[default]
+model = "gemini-flash-latest"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+api_key_env = "GEMINI_API_KEY"
+""",
+    )
+    cfg = load_config(start_dir=str(tmp_path))
+    assert cfg.vision.model == "gemini-flash-latest"
+    assert (
+        cfg.vision.base_url
+        == "https://generativelanguage.googleapis.com/v1beta/openai/"
+    )
+    assert cfg.vision.api_key_env == "GEMINI_API_KEY"
+
+
+def test_vision_model_and_base_url_explicit_overrides_inheritance(
+    tmp_path: Path,
+) -> None:
+    _write_config(
+        tmp_path,
+        """
+[default]
+model = "gemini-flash-latest"
+base_url = "https://generativelanguage.googleapis.com/v1beta/openai/"
+api_key_env = "GEMINI_API_KEY"
+
+[vision]
+model = "meta-llama/llama-3.2-11b-vision-instruct:free"
+base_url = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+""",
+    )
+    cfg = load_config(start_dir=str(tmp_path))
     assert cfg.vision.model == "meta-llama/llama-3.2-11b-vision-instruct:free"
     assert cfg.vision.base_url == "https://openrouter.ai/api/v1"
-    assert cfg.vision.fallback == "ocr"
     assert cfg.vision.api_key_env == "OPENROUTER_API_KEY"
 
 

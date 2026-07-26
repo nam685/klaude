@@ -15,12 +15,13 @@ See Note 26 in docs/07-implementation-notes.md for design rationale.
 """
 
 from klaude.core.client import LLMClient
-from klaude.tools.registry import Tool, ToolRegistry
-from klaude.tools.read_file import tool as read_file_tool
+from klaude.core.tool_call_dict import build_tool_call_dict
+from klaude.tools.git import git_diff_tool, git_log_tool, git_status_tool
 from klaude.tools.glob_search import tool as glob_tool
 from klaude.tools.grep_search import tool as grep_tool
 from klaude.tools.list_directory import tool as list_directory_tool
-from klaude.tools.git import git_status_tool, git_diff_tool, git_log_tool
+from klaude.tools.read_file import tool as read_file_tool
+from klaude.tools.registry import Tool, ToolRegistry
 
 # Shared client — set by Session at startup so sub-agents reuse the connection
 _client: LLMClient | None = None
@@ -71,14 +72,12 @@ def handle_sub_agent(task: str) -> str:
         assistant_msg: dict = {"role": "assistant", "content": msg.content or ""}
         if msg.tool_calls:
             assistant_msg["tool_calls"] = [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.function.name,
-                        "arguments": tc.function.arguments,
-                    },
-                }
+                build_tool_call_dict(
+                    tc.id,
+                    tc.function.name,
+                    tc.function.arguments,
+                    getattr(tc, "extra_content", None),
+                )
                 for tc in msg.tool_calls
             ]
         messages.append(assistant_msg)
