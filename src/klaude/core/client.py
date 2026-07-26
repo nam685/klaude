@@ -51,6 +51,7 @@ class LLMClient:
         self.base_url = base_url
         # Fail fast if remote API has no real API key
         _is_local = "localhost" in base_url or "127.0.0.1" in base_url
+        self._is_local = _is_local
         if not _is_local and api_key in ("not-needed", ""):
             raise ValueError(
                 f"API key required for remote server {base_url}. "
@@ -144,6 +145,15 @@ class LLMClient:
         Tries /props first (llama-server/llama.cpp native), falls back to None.
         Returns the context size in tokens, or None if detection fails.
         """
+        # /props is a local llama.cpp/mlx-lm-server extension — no remote
+        # OpenAI-compatible API implements it, so skip the request entirely
+        # instead of burning a connect-timeout (or worse — this used a bare
+        # httpx transport with no IPv4 pin, so on a host with broken IPv6
+        # routing to the remote provider this could stall 20+ seconds before
+        # giving up, for an endpoint that was always going to 404/fail).
+        if not self._is_local:
+            return None
+
         # Strip /v1 suffix to get the base server URL
         server_url = self.base_url.rstrip("/")
         if server_url.endswith("/v1"):
@@ -167,6 +177,12 @@ class LLMClient:
 
         Returns list of token IDs, or None if endpoint unavailable.
         """
+        # Same rationale as detect_context_window: /tokenize is a local
+        # llama.cpp/mlx-lm-server extension, not part of any remote
+        # OpenAI-compatible API.
+        if not self._is_local:
+            return None
+
         server_url = self.base_url.rstrip("/")
         if server_url.endswith("/v1"):
             server_url = server_url[:-3]
