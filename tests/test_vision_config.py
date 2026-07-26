@@ -3,7 +3,6 @@
 from pathlib import Path
 
 import pytest
-
 from klaude.config import load_config
 
 
@@ -90,6 +89,45 @@ api_key_env = "MY_VISION_KEY"
     )
     cfg = load_config(start_dir=str(tmp_path))
     assert cfg.vision.api_key_env == "MY_VISION_KEY"
+
+
+def test_vision_resolves_literal_api_key_from_default(tmp_path: Path, monkeypatch) -> None:
+    # Primary LLM uses literal api_key (no env). Vision should inherit the
+    # actual resolved key, not rely on an env var that won't exist under sudo.
+    _write_config(tmp_path, '[default]\nmodel = "remote"\napi_key = "sk-literal"\n')
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    cfg = load_config(start_dir=str(tmp_path))
+    assert cfg.vision.api_key == "sk-literal"
+
+
+def test_vision_resolves_env_api_key_from_default(tmp_path: Path, monkeypatch) -> None:
+    _write_config(tmp_path, '[default]\nmodel = "remote"\napi_key_env = "OPENROUTER_API_KEY"\n')
+    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-env")
+    cfg = load_config(start_dir=str(tmp_path))
+    assert cfg.vision.api_key == "sk-env"
+
+
+def test_vision_explicit_literal_api_key_overrides_inheritance(tmp_path: Path, monkeypatch) -> None:
+    _write_config(
+        tmp_path,
+        """
+[default]
+model = "remote"
+api_key = "sk-primary"
+
+[vision]
+api_key = "sk-vision-only"
+""",
+    )
+    cfg = load_config(start_dir=str(tmp_path))
+    assert cfg.vision.api_key == "sk-vision-only"
+
+
+def test_vision_api_key_empty_when_primary_has_no_key(tmp_path: Path, monkeypatch) -> None:
+    _write_config(tmp_path, '[default]\nmodel = "local"\n')
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    cfg = load_config(start_dir=str(tmp_path))
+    assert cfg.vision.api_key == ""
 
 
 def test_vision_invalid_backend_raises(tmp_path: Path) -> None:

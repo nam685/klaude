@@ -7,16 +7,15 @@ from pathlib import Path
 from unittest.mock import MagicMock, patch
 
 import pytest
-
-from tests.fixtures import make_docx, make_pptx, make_xlsx
-
 from klaude.config import VisionConfig
 from klaude.tools._document import (
     MAX_EXTRACTED_BYTES,
-    extract,
     _apply_cap,
     _wrap,
+    extract,
 )
+
+from tests.fixtures import make_docx, make_pptx, make_xlsx
 
 
 def test_wrap_includes_system_reminder_and_document_tags() -> None:
@@ -57,10 +56,7 @@ def test_extract_unsupported_extension(tmp_path: Path) -> None:
 
 def test_html_strips_tags(tmp_path: Path) -> None:
     p = tmp_path / "page.html"
-    p.write_text(
-        "<html><body><h1>Hello</h1><p>World <b>here</b></p>"
-        "<script>alert('x')</script></body></html>"
-    )
+    p.write_text("<html><body><h1>Hello</h1><p>World <b>here</b></p><script>alert('x')</script></body></html>")
     out = extract(p)
     assert "Hello" in out
     assert "World" in out
@@ -76,20 +72,11 @@ def test_html_strips_tags(tmp_path: Path) -> None:
 def test_html_preserves_paragraph_breaks(tmp_path: Path) -> None:
     p = tmp_path / "multi.html"
     p.write_text(
-        "<html><body>"
-        "<p>First paragraph.</p>"
-        "<p>Second paragraph.</p>"
-        "<h2>Heading</h2>"
-        "<p>Third.</p>"
-        "</body></html>"
+        "<html><body><p>First paragraph.</p><p>Second paragraph.</p><h2>Heading</h2><p>Third.</p></body></html>"
     )
     out = extract(p)
     # Paragraphs on separate lines
-    lines = [
-        ln
-        for ln in out.splitlines()
-        if "First paragraph" in ln or "Second paragraph" in ln
-    ]
+    lines = [ln for ln in out.splitlines() if "First paragraph" in ln or "Second paragraph" in ln]
     assert len(lines) == 2
     # Heading present as its own line
     heading_idx = next(i for i, ln in enumerate(out.splitlines()) if "Heading" in ln)
@@ -272,9 +259,7 @@ def test_pdf_encrypted_clean_error(tmp_path: Path) -> None:
     p.write_bytes(b"%PDF-1.4\n")
 
     def fake_run(*args, **_kwargs):
-        return subprocess.CompletedProcess(
-            args=args, returncode=3, stdout=b"", stderr=b"Error: PDF file is encrypted"
-        )
+        return subprocess.CompletedProcess(args=args, returncode=3, stdout=b"", stderr=b"Error: PDF file is encrypted")
 
     with (
         patch("klaude.tools._document.shutil.which", return_value="/usr/bin/pdftotext"),
@@ -318,7 +303,6 @@ def _tiny_png(path: Path) -> Path:
 
 
 def test_image_vlm_backend_calls_model(tmp_path: Path, monkeypatch) -> None:
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
     from klaude.tools import _document as d
 
     fake_client = MagicMock()
@@ -328,7 +312,7 @@ def test_image_vlm_backend_calls_model(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(d, "_openai_client", lambda _cfg: fake_client)
 
     p = _tiny_png(tmp_path / "tiny.png")
-    cfg = VisionConfig()
+    cfg = VisionConfig(api_key="sk-test")
     monkeypatch.setattr(d, "_vision_config", lambda: cfg)
 
     out = d.extract(p)
@@ -353,16 +337,12 @@ def test_image_vlm_fallback_noted_when_key_unset(tmp_path: Path, monkeypatch) ->
     monkeypatch.setattr(
         d,
         "_vision_config",
-        lambda: VisionConfig(
-            backend="vlm", fallback="ocr", api_key_env="OPENROUTER_API_KEY"
-        ),
+        lambda: VisionConfig(backend="vlm", fallback="ocr", api_key_env="OPENROUTER_API_KEY"),
     )
 
     p = _tiny_png(tmp_path / "tiny.png")
     out = d.extract(p)
-    assert (
-        "[vision.backend=vlm but $OPENROUTER_API_KEY unset; used OCR fallback]" in out
-    )
+    assert "[vision.backend=vlm but $OPENROUTER_API_KEY unset; used OCR fallback]" in out
     assert "ocr text here" in out
 
 
@@ -373,9 +353,7 @@ def test_image_vlm_fallback_error_when_configured(tmp_path: Path, monkeypatch) -
     monkeypatch.setattr(
         d,
         "_vision_config",
-        lambda: VisionConfig(
-            backend="vlm", fallback="error", api_key_env="OPENROUTER_API_KEY"
-        ),
+        lambda: VisionConfig(backend="vlm", fallback="error", api_key_env="OPENROUTER_API_KEY"),
     )
     monkeypatch.setattr(d, "_extract_image_ocr", lambda _p: pytest.fail("OCR called"))
 
@@ -419,8 +397,7 @@ def test_image_vlm_refuses_oversize(tmp_path: Path, monkeypatch) -> None:
     """An oversize image should surface a clear error instead of silently uploading."""
     from klaude.tools import _document as d
 
-    monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
-    monkeypatch.setattr(d, "_vision_config", lambda: VisionConfig())
+    monkeypatch.setattr(d, "_vision_config", lambda: VisionConfig(api_key="sk-test"))
     monkeypatch.setattr(d, "_openai_client", lambda _cfg: MagicMock())
 
     # Fake an 11 MB file by writing 11_000_000 bytes of PNG-headered junk.
@@ -435,19 +412,18 @@ def test_image_vlm_refuses_oversize(tmp_path: Path, monkeypatch) -> None:
 
 def test_image_vlm_key_inherited_from_llm(tmp_path: Path, monkeypatch) -> None:
     # Primary LLM config declares api_key_env=OPENROUTER_API_KEY; vision has no
-    # explicit api_key_env. Ensure the VLM path picks up the inherited env var.
-    (tmp_path / ".klaude.toml").write_text(
-        '[default]\nmodel = "remote"\napi_key_env = "OPENROUTER_API_KEY"\n'
-    )
+    # explicit api_key or api_key_env. Ensure the VLM path picks up the
+    # inherited resolved key, not just the env-var name.
+    (tmp_path / ".klaude.toml").write_text('[default]\nmodel = "remote"\napi_key_env = "OPENROUTER_API_KEY"\n')
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-inherited")
     monkeypatch.chdir(tmp_path)
 
     from klaude.tools import _document as d
 
-    seen_api_key: list[str] = []
+    seen_api_keys: list[str] = []
 
     def fake_client(cfg):
-        seen_api_key.append(cfg.api_key_env)
+        seen_api_keys.append(cfg.api_key)
         client = MagicMock()
         client.chat.completions.create.return_value = MagicMock(
             choices=[MagicMock(message=MagicMock(content="inherited key ok"))]
@@ -459,4 +435,32 @@ def test_image_vlm_key_inherited_from_llm(tmp_path: Path, monkeypatch) -> None:
     p = _tiny_png(tmp_path / "tiny.png")
     out = d.extract(p)
     assert "inherited key ok" in out
-    assert seen_api_key == ["OPENROUTER_API_KEY"]
+    assert seen_api_keys == ["sk-inherited"]
+
+
+def test_image_vlm_literal_api_key_inherited_from_default(tmp_path: Path, monkeypatch) -> None:
+    # Primary LLM config uses a literal `api_key` (no env var — matches the
+    # VPS setup where sudo strips the env). Vision must inherit that literal
+    # key instead of checking a missing env var.
+    (tmp_path / ".klaude.toml").write_text('[default]\nmodel = "remote"\napi_key = "sk-literal"\n')
+    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
+    monkeypatch.chdir(tmp_path)
+
+    from klaude.tools import _document as d
+
+    seen_api_keys: list[str] = []
+
+    def fake_client(cfg):
+        seen_api_keys.append(cfg.api_key)
+        client = MagicMock()
+        client.chat.completions.create.return_value = MagicMock(
+            choices=[MagicMock(message=MagicMock(content="literal key ok"))]
+        )
+        return client
+
+    monkeypatch.setattr(d, "_openai_client", fake_client)
+
+    p = _tiny_png(tmp_path / "tiny.png")
+    out = d.extract(p)
+    assert "literal key ok" in out
+    assert seen_api_keys == ["sk-literal"]

@@ -12,7 +12,6 @@ Office extractors import their libraries lazily so plain-text reads via
 from __future__ import annotations
 
 import base64
-import os
 import shutil
 import subprocess
 from html.parser import HTMLParser
@@ -128,6 +127,7 @@ def _extract_xlsx(path: Path) -> str:
     """Extract each sheet of a .xlsx as a CSV block, separated by '---'."""
     import csv
     import io
+
     from openpyxl import load_workbook
 
     wb = load_workbook(filename=str(path), read_only=True, data_only=True)
@@ -184,8 +184,7 @@ def _extract_pdf(path: Path) -> str:
     pdftotext = shutil.which("pdftotext")
     if pdftotext is None:
         raise RuntimeError(
-            "pdftotext not found. Install with: brew install poppler "
-            "(macOS) or apt install poppler-utils (Linux)."
+            "pdftotext not found. Install with: brew install poppler (macOS) or apt install poppler-utils (Linux)."
         )
     proc = subprocess.run(
         [pdftotext, "-layout", str(path), "-"],
@@ -196,8 +195,7 @@ def _extract_pdf(path: Path) -> str:
         raise RuntimeError(f"{path}: password-protected document, cannot extract")
     if proc.returncode != 0:
         raise RuntimeError(
-            f"pdftotext failed (rc={proc.returncode}): "
-            f"{proc.stderr.decode('utf-8', errors='replace').strip()}"
+            f"pdftotext failed (rc={proc.returncode}): {proc.stderr.decode('utf-8', errors='replace').strip()}"
         )
     return proc.stdout.decode("utf-8", errors="replace")
 
@@ -207,8 +205,7 @@ def _extract_image_ocr(path: Path) -> str:
     tesseract = shutil.which("tesseract")
     if tesseract is None:
         raise RuntimeError(
-            "tesseract not found. Install with: brew install tesseract "
-            "(macOS) or apt install tesseract-ocr (Linux)."
+            "tesseract not found. Install with: brew install tesseract (macOS) or apt install tesseract-ocr (Linux)."
         )
     proc = subprocess.run(
         [tesseract, str(path), "-", "-l", "eng"],
@@ -217,8 +214,7 @@ def _extract_image_ocr(path: Path) -> str:
     )
     if proc.returncode != 0:
         raise RuntimeError(
-            f"tesseract failed (rc={proc.returncode}): "
-            f"{proc.stderr.decode('utf-8', errors='replace').strip()}"
+            f"tesseract failed (rc={proc.returncode}): {proc.stderr.decode('utf-8', errors='replace').strip()}"
         )
     return proc.stdout.decode("utf-8", errors="replace")
 
@@ -246,8 +242,7 @@ def _openai_client(cfg: VisionConfig) -> Any:
     """
     from openai import OpenAI
 
-    api_key = os.environ.get(cfg.api_key_env, "")
-    return OpenAI(base_url=cfg.base_url, api_key=api_key)
+    return OpenAI(base_url=cfg.base_url, api_key=cfg.api_key)
 
 
 def _image_data_url(path: Path) -> str:
@@ -291,15 +286,14 @@ def _extract_image(path: Path) -> str:
     cfg = _vision_config()
     if cfg.backend == "ocr":
         return _extract_image_ocr(path)
-    # backend == "vlm"
-    if os.environ.get(cfg.api_key_env):
+    # backend == "vlm". cfg.api_key was already resolved from literal
+    # `[vision] api_key`, `[vision] api_key_env`, or inherited from the
+    # primary LLM's resolved key (see config loader).
+    if cfg.api_key:
         return _extract_image_vlm(path, cfg)
-    # Key unset → consult fallback.
+    # No key available → consult fallback.
     if cfg.fallback == "error":
-        raise RuntimeError(
-            f"vision.backend=vlm requires ${cfg.api_key_env}; "
-            f'set it or set vision.fallback="ocr".'
-        )
+        raise RuntimeError(f'vision.backend=vlm requires ${cfg.api_key_env}; set it or set vision.fallback="ocr".')
     note = _FALLBACK_NOTE_TMPL.format(env="$" + cfg.api_key_env)
     return note + _extract_image_ocr(path)
 
@@ -358,10 +352,7 @@ def extract(path: Path) -> str:
     ext = path.suffix.lower()
     extractor = _EXTRACTORS.get(ext)
     if extractor is None:
-        return (
-            f"Error: unsupported extension {ext!r} for read_document. "
-            f"Supported: {sorted(_EXTRACTORS)}"
-        )
+        return f"Error: unsupported extension {ext!r} for read_document. Supported: {sorted(_EXTRACTORS)}"
 
     try:
         text = extractor(path)
