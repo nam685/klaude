@@ -8,15 +8,14 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from tests.fixtures import make_docx, make_pptx, make_xlsx
-
 from klaude.config import VisionConfig
 from klaude.tools._document import (
     MAX_EXTRACTED_BYTES,
-    extract,
     _apply_cap,
     _wrap,
+    extract,
 )
+from tests.fixtures import make_docx, make_pptx, make_xlsx
 
 
 def test_wrap_includes_system_reminder_and_document_tags() -> None:
@@ -58,8 +57,7 @@ def test_extract_unsupported_extension(tmp_path: Path) -> None:
 def test_html_strips_tags(tmp_path: Path) -> None:
     p = tmp_path / "page.html"
     p.write_text(
-        "<html><body><h1>Hello</h1><p>World <b>here</b></p>"
-        "<script>alert('x')</script></body></html>"
+        "<html><body><h1>Hello</h1><p>World <b>here</b></p><script>alert('x')</script></body></html>"
     )
     out = extract(p)
     assert "Hello" in out
@@ -76,12 +74,7 @@ def test_html_strips_tags(tmp_path: Path) -> None:
 def test_html_preserves_paragraph_breaks(tmp_path: Path) -> None:
     p = tmp_path / "multi.html"
     p.write_text(
-        "<html><body>"
-        "<p>First paragraph.</p>"
-        "<p>Second paragraph.</p>"
-        "<h2>Heading</h2>"
-        "<p>Third.</p>"
-        "</body></html>"
+        "<html><body><p>First paragraph.</p><p>Second paragraph.</p><h2>Heading</h2><p>Third.</p></body></html>"
     )
     out = extract(p)
     # Paragraphs on separate lines
@@ -328,7 +321,7 @@ def test_image_vlm_backend_calls_model(tmp_path: Path, monkeypatch) -> None:
     monkeypatch.setattr(d, "_openai_client", lambda _cfg: fake_client)
 
     p = _tiny_png(tmp_path / "tiny.png")
-    cfg = VisionConfig()
+    cfg = VisionConfig(api_key_env="OPENROUTER_API_KEY")
     monkeypatch.setattr(d, "_vision_config", lambda: cfg)
 
     out = d.extract(p)
@@ -420,7 +413,9 @@ def test_image_vlm_refuses_oversize(tmp_path: Path, monkeypatch) -> None:
     from klaude.tools import _document as d
 
     monkeypatch.setenv("OPENROUTER_API_KEY", "sk-test")
-    monkeypatch.setattr(d, "_vision_config", lambda: VisionConfig())
+    monkeypatch.setattr(
+        d, "_vision_config", lambda: VisionConfig(api_key_env="OPENROUTER_API_KEY")
+    )
     monkeypatch.setattr(d, "_openai_client", lambda _cfg: MagicMock())
 
     # Fake an 11 MB file by writing 11_000_000 bytes of PNG-headered junk.

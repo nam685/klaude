@@ -28,6 +28,7 @@ from openai.types.chat import ChatCompletionChunk
 from rich.console import Console
 from rich.status import Status
 
+from klaude.core.tool_call_dict import build_tool_call_dict
 from klaude.ui.render import StreamPrinter
 
 console = Console()
@@ -44,6 +45,7 @@ class ToolCallAccumulator:
     id: str = ""
     name: str = ""
     arguments: str = ""
+    extra_content: dict | None = None
 
 
 @dataclass
@@ -73,14 +75,7 @@ class StreamResult:
         msg: dict = {"role": "assistant", "content": self.content or None}
         if self.tool_calls:
             msg["tool_calls"] = [
-                {
-                    "id": tc.id,
-                    "type": "function",
-                    "function": {
-                        "name": tc.name,
-                        "arguments": tc.arguments,
-                    },
-                }
+                build_tool_call_dict(tc.id, tc.name, tc.arguments, tc.extra_content)
                 for tc in self.tool_calls
             ]
         return msg
@@ -271,6 +266,11 @@ def consume_stream(
                             acc.name += tc_delta.function.name
                         if tc_delta.function.arguments:
                             acc.arguments += tc_delta.function.arguments
+                    # Gemini's OpenAI-compat endpoint attaches thought_signature
+                    # here; capture it so it can be replayed on the next request.
+                    extra = getattr(tc_delta, "extra_content", None)
+                    if extra:
+                        acc.extra_content = extra
 
                 # Update spinner to show tool call progress
                 if spinner:

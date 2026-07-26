@@ -84,6 +84,7 @@ those formats:
   - macOS: `brew install tesseract`
   - Debian/Ubuntu: `sudo apt install tesseract-ocr`
 
-For VLM-based image descriptions instead of OCR, export
-`OPENROUTER_API_KEY` and configure the `[vision]` block in
-`.klaude.toml`. See `USAGE.md`.
+VLM-based image descriptions work out of the box using your primary
+`[default]`/`[profiles.*]` model/key — no separate setup needed if that
+model handles images. To use a different provider for vision instead,
+configure the `[vision]` block in `.klaude.toml`. See `USAGE.md`.

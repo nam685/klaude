@@ -335,33 +335,47 @@ plain source files.
 
 ### Image handling: VLM-first, OCR fallback
 
-The default backend describes images with an OpenRouter free-tier VLM
-(`meta-llama/llama-3.2-11b-vision-instruct:free`). OCR is the fallback
-when the key is unavailable.
+By default, images are described using the *same* model/base_url/api_key_env
+as your primary `[default]`/`[profiles.*]` config — most modern models
+(Gemini, GPT-4o, Claude, ...) already handle images natively, so no
+separate vision provider is required. OCR is the fallback when no key is
+available.
 
 ```toml
 # .klaude.toml (optional — sensible defaults are built in)
 [vision]
 backend     = "vlm"           # default; "ocr" to skip VLM
-model       = "meta-llama/llama-3.2-11b-vision-instruct:free"
-base_url    = "https://openrouter.ai/api/v1"
-# api_key_env inherits from [default]/[profiles.*] if they set api_key_env,
-# else defaults to OPENROUTER_API_KEY. Override only if you want a
-# different key for vision:
+# model, base_url, and api_key_env all inherit from [default]/[profiles.*]
+# unless overridden here — e.g. to use a separate, cheaper vision model:
+# model       = "meta-llama/llama-3.2-11b-vision-instruct:free"
+# base_url    = "https://openrouter.ai/api/v1"
 # api_key_env = "OPENROUTER_API_KEY"
 fallback    = "ocr"           # "ocr" (default) or "error"
 ```
 
 Resolution order:
 
-1. `backend = "vlm"` and the env var is set → VLM describe.
+1. `backend = "vlm"` and the resolved api_key_env is set → VLM describe.
 2. `backend = "vlm"` and key unset → OCR with a `[...used OCR fallback]`
    note prepended (if `fallback="ocr"`), or a clear error (if
    `fallback="error"`).
 3. `backend = "ocr"` → tesseract directly.
 
-### Rate limits
+### Using a separate vision provider
 
-OpenRouter's free tier imposes ~20 req/min, ~200 req/day on the default
-model. Fine for interactive use; agent loops processing many images
-should set `fallback="ocr"` or configure a paid model.
+If you'd rather not spend your primary model's quota on image description
+(e.g. it's expensive, or has no vision support), point `[vision]` at a
+separate provider explicitly — model, base_url, and api_key_env must all
+be set together, since they need to describe the same endpoint:
+
+```toml
+[vision]
+model       = "meta-llama/llama-3.2-11b-vision-instruct:free"
+base_url    = "https://openrouter.ai/api/v1"
+api_key_env = "OPENROUTER_API_KEY"
+fallback    = "ocr"
+```
+
+OpenRouter's free tier imposes ~20 req/min, ~200 req/day on that model.
+Fine for interactive use; agent loops processing many images should set
+`fallback="ocr"` or configure a paid model.

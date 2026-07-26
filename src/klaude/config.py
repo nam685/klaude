@@ -59,12 +59,19 @@ class MCPServerConfig:
 
 @dataclass
 class VisionConfig:
-    """Configuration for read_document's image handling."""
+    """Configuration for read_document's image handling.
+
+    Defaults to reusing the primary LLM's model/base_url/api_key_env —
+    most modern models (including Gemini) handle images natively, so a
+    separate vision provider is opt-in via [vision], not required. model,
+    base_url, and api_key_env are resolved against the primary config in
+    load_config(); the "" here is just the class-level placeholder.
+    """
 
     backend: str = "vlm"
-    model: str = "meta-llama/llama-3.2-11b-vision-instruct:free"
-    base_url: str = "https://openrouter.ai/api/v1"
-    api_key_env: str = "OPENROUTER_API_KEY"
+    model: str = ""
+    base_url: str = ""
+    api_key_env: str = ""
     fallback: str = "ocr"
 
 
@@ -216,7 +223,9 @@ def load_config(
     mcp = data.get("mcp", {})
     config.mcp_servers = _parse_mcp_servers(mcp)
 
-    # --- [vision] section (with api_key_env inheritance from primary config) ---
+    # --- [vision] section (model/base_url/api_key_env inherit from the
+    # primary config unless explicitly overridden — most modern models,
+    # including Gemini, already handle images natively) ---
     primary_key_env: str | None = None
     if "api_key_env" in default:
         primary_key_env = default["api_key_env"]
@@ -233,10 +242,8 @@ def load_config(
                 f"vision.backend must be 'vlm' or 'ocr', got {vision_raw['backend']!r}"
             )
         vision.backend = vision_raw["backend"]
-    if "model" in vision_raw:
-        vision.model = vision_raw["model"]
-    if "base_url" in vision_raw:
-        vision.base_url = vision_raw["base_url"]
+    vision.model = vision_raw.get("model", config.model)
+    vision.base_url = vision_raw.get("base_url", config.base_url)
     if "fallback" in vision_raw:
         if vision_raw["fallback"] not in ("ocr", "error"):
             raise ValueError(
