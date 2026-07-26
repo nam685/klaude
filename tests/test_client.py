@@ -49,3 +49,33 @@ def test_local_base_url_does_not_force_ipv4():
 
     transport = client.client._client._transport
     assert transport._pool._local_address is None
+
+
+def test_remote_client_skips_props_and_tokenize_endpoints():
+    """/props and /tokenize are local llama.cpp/mlx-lm-server extensions —
+    no remote OpenAI-compatible API implements them. Calling them against a
+    remote base_url was previously always a guaranteed-useless network round
+    trip through a transport with no IPv4 pin, which could stall 20+ seconds
+    on a host with broken IPv6 routing before giving up. Must short-circuit
+    without touching the network at all."""
+    client = LLMClient(base_url="https://api.example.com/v1", api_key="real-key")
+
+    assert client.detect_context_window() is None
+    assert client.tokenize("hello") is None
+
+
+def test_local_client_still_attempts_props_and_tokenize_endpoints(monkeypatch):
+    """Local servers keep the existing detection behavior — only remote
+    clients skip the network call."""
+    import httpx
+
+    client = LLMClient(base_url="http://localhost:8080/v1")
+
+    def fake_get(self, url, **kwargs):
+        assert url == "http://localhost:8080/props"
+        return httpx.Response(
+            200, json={"default_generation_settings": {"n_ctx": 4096}}
+        )
+
+    monkeypatch.setattr(httpx.Client, "get", fake_get)
+    assert client.detect_context_window() == 4096
