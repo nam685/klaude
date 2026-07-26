@@ -64,13 +64,20 @@ class LLMClient:
             if (not thinking and _is_local)
             else None
         )
-        # Explicit httpx client that bypasses proxy env vars (ALL_PROXY, etc.).
-        # Without this, httpx tries to route localhost through a SOCKS proxy.
-        transport = httpx.HTTPTransport()
-        http_client = httpx.Client(transport=transport)
-        self.client = OpenAI(
-            base_url=base_url, api_key=api_key, http_client=http_client
-        )
+        if _is_local:
+            # Explicit httpx client that bypasses proxy env vars (ALL_PROXY, etc.).
+            # Without this, httpx tries to route localhost through a SOCKS proxy.
+            # Only applied for local servers — remote endpoints must keep using
+            # env-configured proxies (if any) and the OpenAI SDK's own generous
+            # default timeout (600s read / 5s connect), rather than silently
+            # falling back to httpx's own bare Client default of 5s for everything.
+            transport = httpx.HTTPTransport()
+            http_client = httpx.Client(transport=transport)
+            self.client = OpenAI(
+                base_url=base_url, api_key=api_key, http_client=http_client
+            )
+        else:
+            self.client = OpenAI(base_url=base_url, api_key=api_key)
 
     def chat(
         self,
