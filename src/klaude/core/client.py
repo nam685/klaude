@@ -9,6 +9,7 @@ from collections.abc import Callable
 
 import httpx
 from openai import (
+    DEFAULT_TIMEOUT,
     APIConnectionError,
     APITimeoutError,
     InternalServerError,
@@ -21,7 +22,6 @@ from openai.types.chat import (
     ChatCompletionMessageParam,
     ChatCompletionToolParam,
 )
-
 
 # Default to local mlx-lm server
 DEFAULT_BASE_URL = "http://localhost:8080/v1"
@@ -67,17 +67,32 @@ class LLMClient:
         if _is_local:
             # Explicit httpx client that bypasses proxy env vars (ALL_PROXY, etc.).
             # Without this, httpx tries to route localhost through a SOCKS proxy.
-            # Only applied for local servers — remote endpoints must keep using
-            # env-configured proxies (if any) and the OpenAI SDK's own generous
-            # default timeout (600s read / 5s connect), rather than silently
-            # falling back to httpx's own bare Client default of 5s for everything.
             transport = httpx.HTTPTransport()
             http_client = httpx.Client(transport=transport)
             self.client = OpenAI(
                 base_url=base_url, api_key=api_key, http_client=http_client
             )
         else:
-            self.client = OpenAI(base_url=base_url, api_key=api_key)
+            # Remote APIs prefer IPv4. Some networks have flaky/partially-broken
+            # IPv6 routes to specific providers (observed in production: several
+            # of Google's round-robined IPv6 addresses refused connections while
+            # IPv4 worked fine) and httpx's sync backend has no Happy-Eyeballs
+            # fallback — it just fails on whichever address family it tries
+            # first. Binding to the IPv4 "any" source address makes
+            # socket.create_connection() skip IPv6 candidates (bind() raises on
+            # a family mismatch) without disabling IPv6 system-wide.
+            #
+            # Passing a custom http_client bypasses the OpenAI SDK's own client
+            # construction — including its generous default timeout (600s
+            # read/write/pool, 5s connect) — so it's replicated explicitly here;
+            # otherwise this would silently fall back to httpx's bare Client
+            # default of 5s for everything, the exact bug fixed for remote
+            # clients previously by *not* passing a custom http_client at all.
+            transport = httpx.HTTPTransport(local_address="0.0.0.0")
+            http_client = httpx.Client(transport=transport, timeout=DEFAULT_TIMEOUT)
+            self.client = OpenAI(
+                base_url=base_url, api_key=api_key, http_client=http_client
+            )
 
     def chat(
         self,
